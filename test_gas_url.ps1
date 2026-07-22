@@ -1,12 +1,16 @@
 $url = "https://script.google.com/macros/s/AKfycbyi0iJclzJWDK1fSEnzSa1AGDHD_YeSlsj9J82XEMTl26UF9EPatP1jv0iJCrpdrghK/exec"
+$payload = '{"action":"addTransaction","transaction":{"patientName":"KimChunJa","treatmentDate":"2026-07-22","submitDate":"2026-07-22","amount":20000,"inCharge":"Sim","hospital":"Haebaek","submitter":"Guardian","residentNo":"431225-2******","insuranceType":"1000","bank":"Nonghyup","account":"316-910094-83307","depositor":"Lee","contact":"010-8337-5915","receiptCount":"1","remarks":"Test"}}'
 
-Write-Host "--- Testing POST Request with text/plain ---"
-$jsonBody = '{"action":"addTransaction","transaction":{"patientName":"TestPatient","treatmentDate":"2026-07-22","submitDate":"2026-07-22","amount":50000,"inCharge":"Admin","hospital":"TestHospital","submitter":"Guardian","residentNo":"900101-1000000","insuranceType":"Health","bank":"Pusan","account":"123-456-789","depositor":"TestUser","contact":"010-1234-5678","receiptCount":"1","remarks":"Test"}}'
-
+Write-Host "Sending POST request to Google Apps Script URL..."
 try {
-    $resPost = Invoke-WebRequest -Uri $url -Method Post -Body $jsonBody -ContentType "text/plain;charset=utf-8" -MaximumRedirection 5
-    Write-Host "POST Status Code: $($resPost.StatusCode)"
-    Write-Host "POST Content: $($resPost.Content)"
+    $res = Invoke-WebRequest -Uri $url -Method Post -Body $payload -ContentType "application/json" -MaximumRedirection 5
+    Write-Host "STATUS CODE:" $res.StatusCode
+    Write-Host "RESPONSE BODY:" $res.Content
 } catch {
-    Write-Host "POST Error: $($_.Exception.Message)"
+    Write-Host "ERROR ENCOUNTERED:" $_.Exception.Message
+    if ($_.Exception.Response) {
+        $stream = $_.Exception.Response.GetResponseStream()
+        $reader = New-Object System.IO.StreamReader($stream)
+        Write-Host "ERROR RESPONSE BODY:" $reader.ReadToEnd()
+    }
 }

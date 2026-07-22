@@ -10,6 +10,7 @@ const state = {
     masterPatients: [],
     transactions: [],
     bulkResults: [],
+    lastAddedTx: null,
     filters: {
         search: '',
         insurance: '',
@@ -363,7 +364,7 @@ function initTabNavigation() {
 }
 
 /* --------------------------------------------------------------------------
-   3. Smart Patient Autocomplete & Selection
+   3. Smart Patient Autocomplete & Form Events
    -------------------------------------------------------------------------- */
 function initFormEvents() {
     const patientInput = document.getElementById('tx-patient-name');
@@ -457,13 +458,15 @@ function initFormEvents() {
             remarks: document.getElementById('tx-remarks').value.trim(),
             adminChecked: false,
             auditChecked: false,
-            isError: false
+            isError: false,
+            isNew: true // Highlight as newly added
         };
 
+        state.lastAddedTx = newTx;
         state.transactions.unshift(newTx);
         saveUserTxToLocalStorage(newTx);
 
-        // Always sync POST to Apps Script URL
+        // Attempt background POST to Google Apps Script
         if (state.gasAppUrl) {
             syncToGoogleSheet({ action: 'addTransaction', transaction: newTx });
         }
@@ -476,8 +479,60 @@ function initFormEvents() {
         state.transactions = sortTransactions(state.transactions, state.filters.sortBy);
 
         renderAll();
-        showToast(`[${name}] 님의 위탁 진료비 수납 건이 저장되었습니다. (구글 시트 5356행으로 전송됨)`, 'success');
+        
+        // Show success alert with 1-Click Copy button for Google Sheet Row 5359!
+        showCopyNotificationForGoogleSheet(newTx);
     });
+}
+
+function showCopyNotificationForGoogleSheet(tx) {
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+
+    // TSV format for Google Sheet Row 5359 paste (Ctrl+V)
+    const tsvRow = [
+        "", // A column
+        tx.patientName,
+        tx.treatmentDate,
+        tx.submitDate,
+        tx.amount,
+        tx.inCharge,
+        tx.hospital,
+        tx.submitter,
+        tx.residentNo,
+        tx.insuranceType,
+        tx.bank,
+        tx.account,
+        tx.depositor,
+        tx.contact,
+        tx.receiptCount,
+        tx.remarks
+    ].join('\t');
+
+    toast.innerHTML = `
+        <div class="flex-between gap-3">
+            <span>🎉 [${escapeHtml(tx.patientName)}] 님 수납 등록 완료! (웹 장부에 실시간 추가됨)</span>
+            <button class="btn btn-sm btn-success" id="copy-row-for-gs-btn" style="background:#ffffff; color:#059669; font-weight:800;">
+                <i class="fa-solid fa-copy"></i> 구글 시트 5359행 복사 (Ctrl+V용)
+            </button>
+        </div>
+    `;
+
+    toast.className = 'toast toast-success';
+    toast.classList.remove('hidden');
+
+    const copyBtn = document.getElementById('copy-row-for-gs-btn');
+    if (copyBtn) {
+        copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(tsvRow).then(() => {
+                alert(`[${tx.patientName}] 님 수납 행이 복사되었습니다!\n\n구글 스프레드시트 5359행 A열을 클릭하신 후 Ctrl+V 하시면 바로 들어갑니다.`);
+            });
+        });
+    }
+
+    setTimeout(() => {
+        toast.classList.add('hidden');
+    }, 7000);
 }
 
 async function syncToGoogleSheet(payload) {
@@ -930,8 +985,11 @@ function renderLedgerTable() {
     }
 
     tbody.innerHTML = pageItems.map(tx => `
-        <tr class="${tx.isError ? 'bg-error-row' : ''}">
-            <td><strong>${escapeHtml(tx.patientName)}</strong></td>
+        <tr class="${tx.isNew ? 'bg-new-row' : ''} ${tx.isError ? 'bg-error-row' : ''}">
+            <td>
+                <strong>${escapeHtml(tx.patientName)}</strong>
+                ${tx.isNew ? '<span class="badge badge-success ml-1">NEW</span>' : ''}
+            </td>
             <td>${escapeHtml(tx.treatmentDate || '-')}</td>
             <td><strong style="color:var(--primary-color)">${escapeHtml(tx.submitDate || '-')}</strong></td>
             <td><strong>₩${(tx.amount || 0).toLocaleString()}</strong></td>
@@ -1099,7 +1157,7 @@ function initPaginationEvents() {
 }
 
 /* --------------------------------------------------------------------------
-   8. Interactive Actions & Handlers
+   6. Interactive Actions & Handlers
    -------------------------------------------------------------------------- */
 window.toggleTxStatus = function(txId, field) {
     const tx = state.transactions.find(t => t.id === txId);
@@ -1189,7 +1247,7 @@ function initFilterEvents() {
 }
 
 /* --------------------------------------------------------------------------
-   9. Modals (Disambiguation & Master Add Patient)
+   7. Modals (Disambiguation & Master Add Patient)
    -------------------------------------------------------------------------- */
 function initModalEvents() {
     const disModal = document.getElementById('disambiguation-modal');
