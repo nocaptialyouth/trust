@@ -1,14 +1,13 @@
 /**
- * Google Apps Script Code for Google Sheets Integration (5359행부터 자동 채움 완결판)
+ * Google Apps Script Code for Google Sheets Integration (I열 이후 자동 채움 완결판)
  * Copy and paste this code into [Extensions] > [Apps Script] in Google Sheets!
  */
 
 const GOOGLE_APPS_SCRIPT_CODE = `
 /**
  * 위탁진료비 수납 및 환자계좌 관리 Google Apps Script
- * - 25~26년 시트 환자명 입력 시 [추가(A,B찾기)] 시트에서 계좌/주민번호 자동 채움
- * - 동명이인(김춘자(A), 김춘자(B) 등) 감지 시 자동 안내
- * - 5359행부터 순차 자동 입력 (doGet / doPost) 지원
+ * - 25~26년 시트 B~H열만 기입되면 I열부터(주민번호, 보험유형, 은행명, 계좌번호, 입금자명, 연락처) [추가(A,B찾기)] 마스터 시트에서 1초 만에 자동 채움
+ * - 5359행부터 순차 자동 입력 지원
  */
 
 // 1. 메뉴 생성 (상단 툴바 메뉴)
@@ -39,7 +38,7 @@ function onEdit(e) {
   }
 }
 
-// 3. 단일 행 자동 채우기
+// 3. 단일 행 I열부터(주민번호, 보험유형, 은행명, 계좌번호, 입금자명, 연락처) 자동 채우기
 function autoFillAccountForSingleRow(targetSheet, rowNum, patientName) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   
@@ -76,7 +75,7 @@ function autoFillAccountForSingleRow(targetSheet, rowNum, patientName) {
     targetSheet.getRange(rowNum, 13).setValue(p[9]); // M: 입금자명
     targetSheet.getRange(rowNum, 14).setValue(p[10]);// N: 연락처
     
-    ss.toast('[' + cleanName + '] 님의 계좌/주민번호 정보가 마스터에서 자동 채워졌습니다.', '계좌 자동입력 완료', 3);
+    ss.toast('[' + cleanName + '] 님의 주민번호/계좌 정보(I~N열)가 마스터에서 자동 채워졌습니다.', 'I열 자동입력 완료', 3);
   } else if (matchedRows.length > 1) {
     var namesList = matchedRows.map(function(r) { return r[1] + '(' + (r[13] || '병동미지정') + ')'; }).join(', ');
     ss.toast('⚠️ 동명이인 ' + matchedRows.length + '명 발견 (' + namesList + '). 이름 뒤에 (A), (B)를 적어주세요.', '동명이인 알림', 6);
@@ -105,7 +104,7 @@ function fillAllAccounts() {
       filledCount++;
     }
   }
-  SpreadsheetApp.getUi().alert('총 ' + filledCount + '건의 수납 데이터 조회가 완료되었습니다.');
+  SpreadsheetApp.getUi().alert('총 ' + filledCount + '건의 수납 데이터 I~N열 조회가 완료되었습니다.');
 }
 
 // 5. 동명이인 검사
@@ -216,7 +215,7 @@ function formatDate(val) {
   return String(val);
 }
 
-// 7. 웹 앱 실시간 백업 API (doPost) - 5359행부터 (기존 5,358건 수납 내역 바로 아래 첫 빈 행) 자동 채움
+// 7. 웹 앱 실시간 백업 API (doPost) - B~H열만 입력, I열부터는 마스터에서 자동 채움
 function doPost(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -230,7 +229,7 @@ function doPost(e) {
       
       // B열(환자성명) 기준으로 데이터가 채워진 마지막 행 바로 다음 첫 빈 행(5359행) 검색
       var lastRow = sheet.getLastRow();
-      var targetRow = 5359; // Default to 5359
+      var targetRow = 5359;
       
       var bValues = sheet.getRange(1, 2, Math.max(lastRow + 20, 5450), 1).getValues();
       for (var r = 3; r < bValues.length; r++) {
@@ -240,16 +239,19 @@ function doPost(e) {
         }
       }
       
+      // B~H열만 기입 (I열부터는 입력 안함 -> autoFillAccountForSingleRow에서 자동 처리)
       var newRow = [
-        '', t.patientName, t.treatmentDate, t.submitDate, t.amount, t.inCharge, t.hospital, t.submitter,
-        t.residentNo, t.insuranceType, t.bank, t.account, t.depositor, t.contact, t.receiptCount, t.remarks
+        '', t.patientName, t.treatmentDate, t.submitDate, t.amount, t.inCharge, t.hospital, t.submitter
       ];
       
       sheet.getRange(targetRow, 1, 1, newRow.length).setValues([newRow]);
       
+      // I열부터(주민번호, 보험유형, 은행명, 계좌번호, 입금자명, 연락처) 자동 채우기 실행
+      autoFillAccountForSingleRow(sheet, targetRow, t.patientName);
+      
       return ContentService.createTextOutput(JSON.stringify({
         status: 'success',
-        message: '구글시트 25~26년 시트 ' + targetRow + '행에 자동 저장되었습니다.'
+        message: '구글시트 25~26년 시트 ' + targetRow + '행 B~H열 저장 및 I열부터 마스터 자동입력이 완료되었습니다.'
       })).setMimeType(ContentService.MimeType.JSON);
     }
     
@@ -297,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (copyBtn) {
         copyBtn.addEventListener('click', () => {
             navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_CODE.trim()).then(() => {
-                alert('5359행부터 자동 채워지는 최신 매크로 코드가 클립보드에 복사되었습니다!\n\n구글 시트의 [확장 프로그램] > [Apps Script]에 붙여넣고 저장해 주세요.');
+                alert('I열부터 마스터에서 자동 채워지는 최신 매크로 코드가 클립보드에 복사되었습니다!\n\n구글 시트의 [확장 프로그램] > [Apps Script]에 붙여넣고 저장해 주세요.');
             });
         });
     }
