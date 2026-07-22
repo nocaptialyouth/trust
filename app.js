@@ -480,7 +480,7 @@ function initFormEvents() {
 
         renderAll();
         
-        // Show success alert with 1-Click Copy button for Google Sheet Row 5359!
+        // Show success alert with 7-Column Copy button for Google Sheet B5359!
         showCopyNotificationForGoogleSheet(newTx);
     });
 }
@@ -489,31 +489,22 @@ function showCopyNotificationForGoogleSheet(tx) {
     const toast = document.getElementById('toast');
     if (!toast) return;
 
-    // TSV format for Google Sheet Row 5359 paste (Ctrl+V)
-    const tsvRow = [
-        "", // A column
+    // TSV format for exact 7 requested columns: B to H (환자명, 진료일자, 제출일자, 금액, 담당자, 위탁병원, 제출자)
+    const tsv7Cols = [
         tx.patientName,
         tx.treatmentDate,
         tx.submitDate,
         tx.amount,
         tx.inCharge,
         tx.hospital,
-        tx.submitter,
-        tx.residentNo,
-        tx.insuranceType,
-        tx.bank,
-        tx.account,
-        tx.depositor,
-        tx.contact,
-        tx.receiptCount,
-        tx.remarks
+        tx.submitter
     ].join('\t');
 
     toast.innerHTML = `
         <div class="flex-between gap-3">
             <span>🎉 [${escapeHtml(tx.patientName)}] 님 수납 등록 완료! (웹 장부에 실시간 추가됨)</span>
             <button class="btn btn-sm btn-success" id="copy-row-for-gs-btn" style="background:#ffffff; color:#059669; font-weight:800;">
-                <i class="fa-solid fa-copy"></i> 구글 시트 5359행 복사 (Ctrl+V용)
+                <i class="fa-solid fa-copy"></i> B5359 셀 7개 항목 복사 (Ctrl+V용)
             </button>
         </div>
     `;
@@ -524,15 +515,15 @@ function showCopyNotificationForGoogleSheet(tx) {
     const copyBtn = document.getElementById('copy-row-for-gs-btn');
     if (copyBtn) {
         copyBtn.addEventListener('click', () => {
-            navigator.clipboard.writeText(tsvRow).then(() => {
-                alert(`[${tx.patientName}] 님 수납 행이 복사되었습니다!\n\n구글 스프레드시트 5359행 A열을 클릭하신 후 Ctrl+V 하시면 바로 들어갑니다.`);
+            navigator.clipboard.writeText(tsv7Cols).then(() => {
+                alert(`[${tx.patientName}] 님의 7개 필수 정보가 복사되었습니다!\n\n(환자명, 진료일자, 제출일자, 금액, 담당자, 위탁병원, 제출자)\n\n구글 스프레드시트 5359행 B열(B5359)을 누르고 Ctrl+V 하시면 바로 깔끔하게 붙여넣어집니다.`);
             });
         });
     }
 
     setTimeout(() => {
         toast.classList.add('hidden');
-    }, 7000);
+    }, 8000);
 }
 
 async function syncToGoogleSheet(payload) {
