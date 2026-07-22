@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>위탁진료비 수납 및 환자계좌 관리 통합 시스템</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="light-theme">
+    <!-- App Container -->
+    <div id="app">
+        <!-- Top Navigation Bar -->
+        <header class="app-header">
+            <div class="logo-container">
+                <div class="logo-icon">
+                    <i class="fa-solid fa-hospital-user"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>위탁진료비 수납 & 계좌 관리 시스템</h1>
+                    <span class="subtitle">병원 원무팀·심사팀 통합 스마트 모듈</span>
+                </div>
+            </div>
+
+            <!-- Navigation Tabs -->
+            <nav class="nav-tabs">
+                <button class="tab-btn active" data-tab="dashboard-tab">
+                    <i class="fa-solid fa-chart-pie"></i> 대시보드
+                </button>
+                <button class="tab-btn" data-tab="ledger-tab">
+                    <i class="fa-solid fa-file-invoice-dollar"></i> 위탁 진료비 누적장부 (25~26년)
+                </button>
+                <button class="tab-btn" data-tab="master-tab">
+                    <i class="fa-solid fa-address-book"></i> 환자/계좌 마스터 (추가 A,B찾기)
+                </button>
+                <button class="tab-btn" data-tab="script-tab">
+                    <i class="fa-solid fa-code"></i> 구글 시트 백업/연동 설정
+                </button>
+            </nav>
+
+            <!-- Quick Utilities -->
+            <div class="header-utilities">
+                <button id="sync-live-sheet-btn" class="btn btn-success btn-sm" title="구글 시트의 실시간 최신 환자/계좌 데이터 불러오기">
+                    <i class="fa-solid fa-rotate"></i> 구글 시트 실시간 동기화
+                </button>
+                <button id="theme-toggle-btn" class="icon-btn" title="다크/라이트 모드 전환">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
+                <button id="export-excel-btn" class="btn btn-secondary btn-sm">
+                    <i class="fa-solid fa-file-excel"></i> 엑셀 내보내기
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- 1. DASHBOARD TAB -->
+            <section id="dashboard-tab" class="tab-content active">
+                <!-- Sync Status Alert Bar -->
+                <div id="sync-status-bar" class="sync-banner info">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <span id="sync-status-text">웹 통합 시스템 로컬 모드 (연동 URL 없이도 웹에서 수납 입력, 자동완성, 엑셀 내보내기가 100% 작동합니다)</span>
+                    <button class="btn btn-sm btn-outline" onclick="document.querySelector('[data-tab=\'script-tab\']').click()">연동 설정하기</button>
+                </div>
+
+                <!-- Dashboard 5 Stat Cards Grid -->
+                <div class="dashboard-grid mt-3">
+                    <!-- Stat Card 1 -->
+                    <div class="stat-card blue">
+                        <div class="stat-header">
+                            <span class="stat-title">총 누적 청구 금액</span>
+                            <div class="stat-icon"><i class="fa-solid fa-won-sign"></i></div>
+                        </div>
+                        <div class="stat-value" id="stat-total-amount">₩0</div>
+                        <div class="stat-footer">
+                            <span id="stat-total-count">0</span> 건 누적됨
+                        </div>
+                    </div>
+
+                    <!-- Stat Card 2 (NEW: This Week's Submissions) -->
+                    <div class="stat-card teal">
+                        <div class="stat-header">
+                            <span class="stat-title">📅 이번 주 제출 건수 (주간 동기화)</span>
+                            <div class="stat-icon"><i class="fa-solid fa-calendar-week"></i></div>
+                        </div>
+                        <div class="stat-value" id="stat-weekly-count">0건</div>
+                        <div class="stat-footer" id="stat-weekly-range">
+                            이번 주 (07.20 ~ 07.26) ₩0
+                        </div>
+                    </div>
+
+                    <!-- Stat Card 3 -->
+                    <div class="stat-card green">
+                        <div class="stat-header">
+                            <span class="stat-title">등록된 환자 마스터</span>
+                            <div class="stat-icon"><i class="fa-solid fa-user-gear"></i></div>
+                        </div>
+                        <div class="stat-value" id="stat-master-count">0명</div>
+                        <div class="stat-footer">
+                            주민번호·계좌 데이터베이스
+                        </div>
+                    </div>
+
+                    <!-- Stat Card 4 -->
+                    <div class="stat-card purple">
+                        <div class="stat-header">
+                            <span class="stat-title">원무 / 심사 검토 완료</span>
+                            <div class="stat-icon"><i class="fa-solid fa-clipboard-check"></i></div>
+                        </div>
+                        <div class="stat-value" id="stat-checked-count">0건</div>
+                        <div class="stat-footer">
+                            원무: <span id="stat-admin-count">0</span> | 심사: <span id="stat-audit-count">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Stat Card 5 -->
+                    <div class="stat-card orange">
+                        <div class="stat-header">
+                            <span class="stat-title">중복 / 오류 검토 필요</span>
+                            <div class="stat-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                        </div>
+                        <div class="stat-value" id="stat-error-count">0건</div>
+                        <div class="stat-footer">
+                            심사팀 확인 요망 건수
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dashboard Feature 1: Quick Patient & Account Instant Search Widget -->
+                <div class="card shadow-sm mt-4">
+                    <div class="card-header border-bottom">
+                        <h3><i class="fa-solid fa-magnifying-glass-chart"></i> 환자 계좌 & 주민번호 퀵 검색 (대시보드 즉시 조회)</h3>
+                        <p class="text-muted">환자 이름을 검색하면 주민번호, 은행, 계좌번호, 입금자명, 연락처, 병동 정보가 한눈에 나타납니다.</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group mb-3">
+                            <div class="input-with-icon">
+                                <i class="fa-solid fa-user-check search-icon"></i>
+                                <input type="text" id="dashboard-patient-search" class="form-control form-control-lg" placeholder="환자 성명 또는 주민번호 검색 (예: 김춘자, 정순애, 서윤화)..." autocomplete="off">
+                            </div>
+                        </div>
+
+                        <!-- Instant Patient Result Card View -->
+                        <div id="dashboard-patient-search-results" class="quick-search-results-grid">
+                            <div class="text-center text-muted p-4 border border-dashed rounded">
+                                <i class="fa-solid fa-keyboard fa-2x mb-2" style="color:var(--primary-color)"></i><br>
+                                위에 환자 이름을 입력하시면 계좌번호, 주민번호, 입금자명이 바로 표시됩니다.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Transactions Summary -->
+                <div class="card shadow-sm mt-4">
+                    <div class="card-header border-bottom flex-between">
+                        <h3><i class="fa-solid fa-clock-rotate-left"></i> 최근 수납 등록 데이터 (최근 제출일자순)</h3>
+                        <button class="btn btn-sm btn-outline" id="go-to-ledger-btn">전체 장부 보기 <i class="fa-solid fa-arrow-right"></i></button>
+                    </div>
+                    <div class="card-body p-0 table-responsive">
+                        <table class="data-table" id="dashboard-recent-table">
+                            <thead>
+                                <tr>
+                                    <th>환자명</th>
+                                    <th>진료일자</th>
+                                    <th>제출일자 ▼</th>
+                                    <th>금액</th>
+                                    <th>담당자</th>
+                                    <th>위탁병원</th>
+                                    <th>주민번호</th>
+                                    <th>은행/계좌번호</th>
+                                    <th>입금자명</th>
+                                    <th>원무확인</th>
+                                    <th>심사확인</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recent-transactions-list">
+                                <!-- Loaded dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. LEDGER TAB (25~26년 시트) -->
+            <section id="ledger-tab" class="tab-content">
+                <div class="ledger-layout">
+                    <!-- Left: Quick Entry Form -->
+                    <div class="form-container card">
+                        <div class="card-header flex-between">
+                            <h3><i class="fa-solid fa-pen-to-square"></i> 위탁 진료비 신규 입력</h3>
+                            <span class="badge badge-info">마스터 데이터 자동 완성</span>
+                        </div>
+                        <form id="add-transaction-form" class="card-body">
+                            <!-- Smart Patient Search Input -->
+                            <div class="form-group relative">
+                                <label for="tx-patient-name" class="required-label">환자명 (동명이인 검색)</label>
+                                <div class="input-with-icon">
+                                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                                    <input type="text" id="tx-patient-name" class="form-control" placeholder="예: 김춘자, 송창우" autocomplete="off" required>
+                                </div>
+                                <!-- Auto-complete Dropdown -->
+                                <div id="patient-autocomplete-dropdown" class="autocomplete-dropdown hidden"></div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group col-6">
+                                    <label for="tx-treatment-date" class="required-label">진료일자</label>
+                                    <input type="date" id="tx-treatment-date" class="form-control" required>
+                                </div>
+                                <div class="form-group col-6">
+                                    <label for="tx-submit-date" class="required-label">제출일자</label>
+                                    <input type="date" id="tx-submit-date" class="form-control" required>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group col-6">
+                                    <label for="tx-amount" class="required-label">금액 (원)</label>
+                                    <input type="number" id="tx-amount" class="form-control" placeholder="0" min="0" required>
+                                </div>
+                                <div class="form-group col-6">
+                                    <label for="tx-in-charge">담당자</label>
+                                    <input type="text" id="tx-in-charge" class="form-control" placeholder="예: 심준영, 오상헌">
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group col-6">
+                                    <label for="tx-hospital">위탁병원 / 진료과</label>
+                                    <input type="text" id="tx-hospital" class="form-control" placeholder="예: 해백 신경외과">
+                                </div>
+                                <div class="form-group col-6">
+                                    <label for="tx-submitter">제출자</label>
+                                    <select id="tx-submitter" class="form-control">
+                                        <option value="보호자">보호자</option>
+                                        <option value="본인">본인</option>
+                                        <option value="간병사">간병사</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <hr class="divider">
+                            <span class="section-subtitle"><i class="fa-solid fa-robot"></i> 환자 마스터 연동 정보 (자동 채움)</span>
+
+                            <div class="form-row">
+                                <div class="form-group col-6">
+                                    <label for="tx-resident-no">주민번호</label>
+                                    <input type="text" id="tx-resident-no" class="form-control bg-readonly" readonly placeholder="자동 채워짐">
+                                </div>
+                                <div class="form-group col-6">
+                                    <label for="tx-insurance-type">보험유형</label>
+                                    <input type="text" id="tx-insurance-type" class="form-control bg-readonly" readonly placeholder="자동 채워짐">
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group col-4">
+                                    <label for="tx-bank">은행명</label>
+                                    <input type="text" id="tx-bank" class="form-control bg-readonly" readonly placeholder="자동 채워짐">
+                                </div>
+                                <div class="form-group col-8">
+                                    <label for="tx-account">계좌번호</label>
+                                    <input type="text" id="tx-account" class="form-control bg-readonly" readonly placeholder="자동 채워짐">
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group col-6">
+                                    <label for="tx-depositor">입금자명</label>
+                                    <input type="text" id="tx-depositor" class="form-control bg-readonly" readonly placeholder="자동 채워짐">
+                                </div>
+                                <div class="form-group col-6">
+                                    <label for="tx-contact">연락처</label>
+                                    <input type="text" id="tx-contact" class="form-control bg-readonly" readonly placeholder="자동 채워짐">
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group col-4">
+                                    <label for="tx-receipt-count">제출 영수증 수</label>
+                                    <input type="number" id="tx-receipt-count" class="form-control" value="1" min="1">
+                                </div>
+                                <div class="form-group col-8">
+                                    <label for="tx-remarks">기타 / 비고</label>
+                                    <input type="text" id="tx-remarks" class="form-control" placeholder="예: 신환, 계좌변경 등">
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-block mt-3">
+                                <i class="fa-solid fa-plus-circle"></i> 누적장부에 등록 저장하기
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Right: Accumulated Data Table & Filters -->
+                    <div class="table-container card">
+                        <div class="card-header">
+                            <div class="flex-between flex-wrap gap-2">
+                                <h3><i class="fa-solid fa-list-check"></i> 25~26년 위탁 수납 데이터 목록</h3>
+                                <div class="table-actions flex-center gap-2">
+                                    <span class="total-count-badge" id="filtered-tx-count">총 0건</span>
+                                    <select id="ledger-page-size" class="form-control form-control-sm w-auto">
+                                        <option value="100">100개씩 보기</option>
+                                        <option value="500">500개씩 보기</option>
+                                        <option value="0">전체 한눈에 보기</option>
+                                    </select>
+                                    <button class="btn btn-sm btn-outline" id="reset-filters-btn">필터 초기화</button>
+                                </div>
+                            </div>
+                            <!-- Filter Bar -->
+                            <div class="filter-bar mt-3">
+                                <div class="filter-group">
+                                    <input type="text" id="filter-search" class="form-control form-control-sm" placeholder="환자명, 병원, 담당자 검색...">
+                                </div>
+                                <div class="filter-group">
+                                    <select id="filter-insurance" class="form-control form-control-sm">
+                                        <option value="">전체 보험유형</option>
+                                        <option value="건강보험">건강보험</option>
+                                        <option value="급여 1종">급여 1종</option>
+                                        <option value="급여 2종">급여 2종</option>
+                                        <option value="희귀난치">희귀난치</option>
+                                        <option value="산재보험">산재보험</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <select id="filter-status" class="form-control form-control-sm">
+                                        <option value="">전체 검토 상태</option>
+                                        <option value="admin-pending">원무팀 미확인</option>
+                                        <option value="audit-pending">심사팀 미확인</option>
+                                        <option value="error">중복/오류건</option>
+                                        <option value="completed">검토 모두 완료</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <select id="filter-sort-by" class="form-control form-control-sm">
+                                        <option value="submitDate-desc">📅 최근 제출일순 (기본 최신순)</option>
+                                        <option value="submitDate-asc">📅 과거 제출일순 (오래된순)</option>
+                                        <option value="treatmentDate-desc">🏥 최근 진료일순</option>
+                                        <option value="treatmentDate-asc">🏥 과거 진료일순</option>
+                                        <option value="amount-desc">💰 높은 금액순</option>
+                                        <option value="amount-asc">💰 낮은 금액순</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card-body p-0 table-responsive ledger-table-wrapper">
+                            <table class="data-table sticky-header">
+                                <thead>
+                                    <tr>
+                                        <th>환자명</th>
+                                        <th>진료일자</th>
+                                        <th>제출일자 ▼</th>
+                                        <th>금액</th>
+                                        <th>담당자</th>
+                                        <th>위탁병원</th>
+                                        <th>주민번호</th>
+                                        <th>보험유형</th>
+                                        <th>은행명</th>
+                                        <th>계좌번호</th>
+                                        <th>입금자명</th>
+                                        <th>원무확인</th>
+                                        <th>심사확인</th>
+                                        <th>오류표시</th>
+                                        <th>삭제</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ledger-table-body">
+                                    <!-- Table Rows -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Ledger Pagination -->
+                        <div class="card-footer p-2 flex-between" style="background:var(--bg-main); border-top:1px solid var(--border-color);">
+                            <div id="ledger-pagination" class="flex-center gap-2"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. MASTER TAB (추가(A,B찾기) 시트) -->
+            <section id="master-tab" class="tab-content">
+                <div class="card">
+                    <div class="card-header flex-between flex-wrap gap-2">
+                        <div>
+                            <h3><i class="fa-solid fa-address-card"></i> 환자 및 계좌 정보 마스터 (`추가(A,B찾기)` 시트)</h3>
+                            <p class="text-muted" id="master-filtered-count">등록된 환자 인적사항, 주민번호, 보험유형, 계좌번호 데이터베이스입니다.</p>
+                        </div>
+                        <div class="flex-center gap-2">
+                            <select id="master-page-size" class="form-control form-control-sm w-auto">
+                                <option value="100">100명씩 보기</option>
+                                <option value="500">500명씩 보기</option>
+                                <option value="0">전체 한눈에 보기 (1,570명)</option>
+                            </select>
+                            <input type="text" id="master-search-input" class="form-control form-control-sm w-auto" placeholder="성명, 주민번호, 병동 검색...">
+                            <button class="btn btn-success btn-sm" id="open-add-patient-modal">
+                                <i class="fa-solid fa-user-plus"></i> 신규 환자 마스터 등록
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card-body p-0 table-responsive">
+                        <table class="data-table sticky-header">
+                            <thead>
+                                <tr>
+                                    <th>순번 (시트Seq)</th>
+                                    <th>환자성명</th>
+                                    <th>주민번호</th>
+                                    <th>성별/나이</th>
+                                    <th>보험유형</th>
+                                    <th>진료과</th>
+                                    <th>은행명</th>
+                                    <th>계좌번호</th>
+                                    <th>입금자명</th>
+                                    <th>연락처</th>
+                                    <th>병동</th>
+                                    <th>비고/인적메모</th>
+                                    <th>작업</th>
+                                </tr>
+                            </thead>
+                            <tbody id="master-table-body">
+                                <!-- Loaded dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Master Pagination -->
+                    <div class="card-footer p-2 flex-between" style="background:var(--bg-main); border-top:1px solid var(--border-color);">
+                        <div id="master-pagination" class="flex-center gap-2"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. GOOGLE APPS SCRIPT TAB -->
+            <section id="script-tab" class="tab-content">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3><i class="fa-solid fa-cloud-arrow-up"></i> 구글 스프레드시트 백업/연동 설정</h3>
+                        <p class="text-muted">연동 URL 없이도 웹 사이트 내에서 1,570명 환자 검색, 자동완성, 수납 등록 및 엑셀 다운로드가 100% 정상 동작합니다.</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label for="gas-app-url">배포된 구글 웹앱 URL (선택사항)</label>
+                            <div class="flex-center gap-2">
+                                <input type="url" id="gas-app-url" class="form-control" placeholder="https://script.google.com/macros/s/AKfycbyi.../exec">
+                                <button class="btn btn-primary" id="save-gas-url-btn"><i class="fa-solid fa-link"></i> 연동 URL 저장</button>
+                                <button class="btn btn-secondary" id="clear-gas-url-btn"><i class="fa-solid fa-xmark"></i> 연동 URL 해제 (오류창 제거)</button>
+                            </div>
+                            <small class="form-text text-muted mt-1">※ 주황색 오류창이 뜨실 경우 <strong>[연동 URL 해제]</strong> 버튼을 누르시면 오류 메시지 없이 로컬 단독으로 편하게 사용하실 수 있습니다.</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fa-solid fa-code-compare"></i> 구글 스프레드시트 매크로 (Apps Script) 적용 가이드</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="script-guide-grid">
+                            <div class="guide-steps">
+                                <h4><i class="fa-solid fa-list-ol"></i> 시트 자동 채우기 매크로 적용</h4>
+                                <ol class="step-list">
+                                    <li>사용 중이신 <strong>구글 스프레드시트</strong>를 엽니다.</li>
+                                    <li>상단 메뉴에서 <strong>[확장 프로그램] &gt; [Apps Script]</strong>를 클릭합니다.</li>
+                                    <li>우측 코드 편집기에 기존 내용을 지우고, 오른쪽의 <strong>[매크로 코드 복사]</strong> 버튼을 눌러 붙여넣습니다.</li>
+                                    <li>상단 저장 아이콘(<i class="fa-solid fa-floppy-disk"></i>)을 누릅니다.</li>
+                                    <li>구글 시트를 새로고침하면 상단에 <strong>[🏥 위탁수납 관리]</strong> 메뉴가 생기며 환자명 작성 시 계좌/주민번호가 자동 채워집니다.</li>
+                                </ol>
+                            </div>
+
+                            <div class="code-container">
+                                <div class="code-header flex-between">
+                                    <span>Code: Code.gs</span>
+                                    <button class="btn btn-sm btn-outline" id="copy-script-btn">
+                                        <i class="fa-solid fa-copy"></i> 매크로 코드 복사
+                                    </button>
+                                </div>
+                                <textarea id="apps-script-code-text" class="code-area" readonly></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal 1: Disambiguation Modal for Duplicate Names (e.g. 김춘자(A) vs 김춘자(B)) -->
+    <div id="disambiguation-modal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-users-viewfinder"></i> 동명이인 환자 선택</h3>
+                <button class="close-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="alert-info-box">
+                    <i class="fa-solid fa-circle-info"></i>
+                    검색하신 환자 이름으로 등록된 마스터 환자가 여러 명 있습니다.<br>
+                    정확한 주민번호, 병동, 나이를 확인하시고 대상 환자를 선택해 주세요.
+                </p>
+                <div id="disambiguation-list" class="patient-select-list">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 2: Add Master Patient Modal -->
+    <div id="add-patient-modal" class="modal-overlay hidden">
+        <div class="modal-box modal-lg">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-user-plus"></i> 신규 환자/계좌 마스터 등록</h3>
+                <button class="close-modal-btn">&times;</button>
+            </div>
+            <form id="add-patient-form" class="modal-body">
+                <div class="form-row">
+                    <div class="form-group col-6">
+                        <label for="m-name" class="required-label">환자성명</label>
+                        <input type="text" id="m-name" class="form-control" placeholder="예: 김춘자(A) 또는 김춘자" required>
+                        <small class="form-text text-muted" id="duplicate-warning-text"></small>
+                    </div>
+                    <div class="form-group col-6">
+                        <label for="m-resident-no" class="required-label">주민등록번호</label>
+                        <input type="text" id="m-resident-no" class="form-control" placeholder="예: 570804-1******" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group col-4">
+                        <label for="m-gender">성별</label>
+                        <select id="m-gender" class="form-control">
+                            <option value="F">여성 (F)</option>
+                            <option value="M">남성 (M)</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-4">
+                        <label for="m-age">나이</label>
+                        <input type="number" id="m-age" class="form-control" placeholder="예: 75">
+                    </div>
+                    <div class="form-group col-4">
+                        <label for="m-insurance">보험유형</label>
+                        <input type="text" id="m-insurance" class="form-control" placeholder="예: 건강보험, 급여1종">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group col-4">
+                        <label for="m-bank">은행명</label>
+                        <input type="text" id="m-bank" class="form-control" placeholder="예: 부산, 농협, 국민">
+                    </div>
+                    <div class="form-group col-8">
+                        <label for="m-account">계좌번호</label>
+                        <input type="text" id="m-account" class="form-control" placeholder="예: 112-2314-6918-09">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group col-6">
+                        <label for="m-depositor">입금자명</label>
+                        <input type="text" id="m-depositor" class="form-control" placeholder="예: 송정곤 (보호자)">
+                    </div>
+                    <div class="form-group col-6">
+                        <label for="m-contact">연락처</label>
+                        <input type="text" id="m-contact" class="form-control" placeholder="예: 010-3852-4168">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group col-6">
+                        <label for="m-ward">병동</label>
+                        <input type="text" id="m-ward" class="form-control" placeholder="예: 05W-500-01">
+                    </div>
+                    <div class="form-group col-6">
+                        <label for="m-dept">진료과</label>
+                        <input type="text" id="m-dept" class="form-control" placeholder="예: 재활의학과">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="m-memo">환자 인적사항 및 메모</label>
+                    <input type="text" id="m-memo" class="form-control" placeholder="기타 인적사항 메모">
+                </div>
+
+                <div class="modal-footer flex-end gap-2 mt-4">
+                    <button type="button" class="btn btn-secondary close-modal-btn">취소</button>
+                    <button type="submit" class="btn btn-success"><i class="fa-solid fa-save"></i> 마스터에 환자 등록</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="initial_data.js"></script>
+    <script src="google_apps_script.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
