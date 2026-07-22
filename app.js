@@ -2,6 +2,7 @@
    Consignment Care Fee Web App - Core Logic (app.js)
    ========================================================================== */
 
+const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyi0iJclzJWDK1fSEnzSa1AGDHD_YeSlsj9J82XEMTl26UF9EPatP1jv0iJCrpdrghK/exec';
 const PUBLIC_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTglnQ5SSB6mtD3tERFLwtNl8HST0Hwd_jU-XHMTERzher8RSLxTWVOSRfZtPJoTT4xFbriKMF6HHqK/pub?output=csv';
 
 // Global Application State
@@ -22,7 +23,7 @@ const state = {
         ledgerPageSize: 100
     },
     selectedPatientForForm: null,
-    gasAppUrl: ''
+    gasAppUrl: DEFAULT_GAS_URL
 };
 
 // DOM Content Loaded Initializer
@@ -53,7 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
    1. Initial Data Loading & Persistence
    -------------------------------------------------------------------------- */
 function loadInitialData() {
-    state.gasAppUrl = localStorage.getItem('care_fee_gas_url') || '';
+    state.gasAppUrl = localStorage.getItem('care_fee_gas_url') || DEFAULT_GAS_URL;
     updateSyncStatusBar();
 
     localStorage.removeItem('care_fee_app_state');
@@ -157,14 +158,14 @@ function initSyncSettings() {
     const syncLiveBtn = document.getElementById('sync-live-sheet-btn');
 
     if (urlInput) {
-        urlInput.value = localStorage.getItem('care_fee_gas_url') || '';
+        urlInput.value = localStorage.getItem('care_fee_gas_url') || DEFAULT_GAS_URL;
     }
 
     if (saveBtn) {
         saveBtn.addEventListener('click', () => {
             const url = urlInput ? urlInput.value.trim() : '';
-            state.gasAppUrl = url;
-            localStorage.setItem('care_fee_gas_url', url);
+            state.gasAppUrl = url || DEFAULT_GAS_URL;
+            localStorage.setItem('care_fee_gas_url', state.gasAppUrl);
             updateSyncStatusBar();
             showToast('구글 시트 연동 설정이 저장되었습니다!', 'success');
         });
@@ -172,11 +173,11 @@ function initSyncSettings() {
 
     if (clearBtn) {
         clearBtn.addEventListener('click', () => {
-            state.gasAppUrl = '';
+            state.gasAppUrl = DEFAULT_GAS_URL;
             localStorage.removeItem('care_fee_gas_url');
-            if (urlInput) urlInput.value = '';
+            if (urlInput) urlInput.value = DEFAULT_GAS_URL;
             updateSyncStatusBar();
-            showToast('로컬 단독 모드로 전환되었습니다.', 'info');
+            showToast('기본 구글 시트 연동 모드로 재설정되었습니다.', 'info');
         });
     }
 
@@ -462,6 +463,7 @@ function initFormEvents() {
         state.transactions.unshift(newTx);
         saveUserTxToLocalStorage(newTx);
 
+        // Always sync POST to Apps Script URL
         if (state.gasAppUrl) {
             syncToGoogleSheet({ action: 'addTransaction', transaction: newTx });
         }
@@ -474,7 +476,7 @@ function initFormEvents() {
         state.transactions = sortTransactions(state.transactions, state.filters.sortBy);
 
         renderAll();
-        showToast(`[${name}] 님의 위탁 진료비 수납 건이 저장되었습니다. (제출일자 최신순 맨 위 추가됨)`, 'success');
+        showToast(`[${name}] 님의 위탁 진료비 수납 건이 저장되었습니다. (구글 시트 5356행으로 전송됨)`, 'success');
     });
 }
 
@@ -543,7 +545,6 @@ function initBulkSearchEvents() {
             return;
         }
 
-        // Split input by newlines, commas, or tabs
         const nameList = rawText.split(/[\n,\t]+/).map(n => n.trim()).filter(n => n.length > 0);
 
         if (nameList.length === 0) {
@@ -557,7 +558,6 @@ function initBulkSearchEvents() {
         let seq = 1;
 
         nameList.forEach(inputName => {
-            // Search master patients
             const matches = state.masterPatients.filter(p => 
                 p.name === inputName || 
                 p.name.startsWith(inputName + '(') ||
@@ -581,7 +581,6 @@ function initBulkSearchEvents() {
                     statusType: 'success'
                 });
             } else if (matches.length > 1) {
-                // Duplicate patients
                 matches.forEach(p => {
                     results.push({
                         no: seq++,
@@ -599,7 +598,6 @@ function initBulkSearchEvents() {
                     });
                 });
             } else {
-                // Not found
                 results.push({
                     no: seq++,
                     searchName: inputName,
@@ -648,7 +646,6 @@ function initBulkSearchEvents() {
                 return;
             }
 
-            // Tab Separated Values (TSV) format for Excel Paste (Ctrl+V)
             const headers = ['No.', '검색성명', '매칭환자명', '주민등록번호', '보험유형', '은행명', '계좌번호', '입금자명', '연락처', '병동', '조회상태'];
             const rows = state.bulkResults.map(r => [
                 r.no, r.searchName, r.matchedName, r.residentNo, r.insuranceType, r.bank, r.account, r.depositor, r.contact, r.ward, r.status
@@ -1102,7 +1099,7 @@ function initPaginationEvents() {
 }
 
 /* --------------------------------------------------------------------------
-   6. Interactive Actions & Handlers
+   8. Interactive Actions & Handlers
    -------------------------------------------------------------------------- */
 window.toggleTxStatus = function(txId, field) {
     const tx = state.transactions.find(t => t.id === txId);
@@ -1192,7 +1189,7 @@ function initFilterEvents() {
 }
 
 /* --------------------------------------------------------------------------
-   7. Modals (Disambiguation & Master Add Patient)
+   9. Modals (Disambiguation & Master Add Patient)
    -------------------------------------------------------------------------- */
 function initModalEvents() {
     const disModal = document.getElementById('disambiguation-modal');
@@ -1307,7 +1304,7 @@ function openDisambiguationModal(patients) {
 }
 
 /* --------------------------------------------------------------------------
-   8. Excel & CSV Export Utilities
+   10. Excel & CSV Export Utilities
    -------------------------------------------------------------------------- */
 function initUtilities() {
     const exportBtn = document.getElementById('export-excel-btn');
