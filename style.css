@@ -190,6 +190,15 @@ body {
     box-shadow: 0 2px 6px rgba(13, 148, 136, 0.4);
 }
 
+.tab-btn.highlight-tab {
+    border: 1px dashed #0d9488;
+    color: #2dd4bf;
+}
+
+.tab-btn.highlight-tab:hover {
+    background-color: rgba(13, 148, 136, 0.2);
+}
+
 /* Header Utilities */
 .header-utilities {
     display: flex;
@@ -337,6 +346,39 @@ body {
 .stat-footer {
     font-size: 0.8rem;
     color: var(--text-muted);
+}
+
+/* 5th Tab: Bulk Search Grid Layout */
+.bulk-search-grid {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 1.25rem;
+    align-items: start;
+}
+
+@media (max-width: 1100px) {
+    .bulk-search-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.bulk-textarea {
+    height: 520px;
+    font-family: 'Pretendard', sans-serif;
+    font-size: 0.92rem;
+    line-height: 1.6;
+    padding: 1rem;
+    resize: vertical;
+    border: 2px dashed var(--border-color);
+}
+
+.bulk-textarea:focus {
+    border-color: var(--primary-color);
+    border-style: solid;
+}
+
+.bulk-table-wrapper {
+    max-height: 560px;
 }
 
 /* Dashboard Quick Patient Search Results Cards Grid */

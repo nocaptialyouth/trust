@@ -38,6 +38,9 @@
                 <button class="tab-btn" data-tab="master-tab">
                     <i class="fa-solid fa-address-book"></i> 환자/계좌 마스터 (추가 A,B찾기)
                 </button>
+                <button class="tab-btn highlight-tab" data-tab="bulk-search-tab">
+                    <i class="fa-solid fa-users-rectangle"></i> 다중 환자/계좌 일괄조회 (100명)
+                </button>
                 <button class="tab-btn" data-tab="script-tab">
                     <i class="fa-solid fa-code"></i> 구글 시트 백업/연동 설정
                 </button>
@@ -82,7 +85,7 @@
                         </div>
                     </div>
 
-                    <!-- Stat Card 2 (NEW: This Week's Submissions) -->
+                    <!-- Stat Card 2 (This Week's Submissions) -->
                     <div class="stat-card teal">
                         <div class="stat-header">
                             <span class="stat-title">📅 이번 주 제출 건수 (주간 동기화)</span>
@@ -437,7 +440,82 @@
                 </div>
             </section>
 
-            <!-- 4. GOOGLE APPS SCRIPT TAB -->
+            <!-- 4. NEW TAB: BULK SEARCH (100명 동시에 환자/계좌/주민번호 일괄조회) -->
+            <section id="bulk-search-tab" class="tab-content">
+                <div class="card">
+                    <div class="card-header flex-between flex-wrap gap-2 border-bottom">
+                        <div>
+                            <h3><i class="fa-solid fa-users-rectangle text-primary"></i> 다중 환자 계좌 & 주민번호 100명 일괄 조회</h3>
+                            <p class="text-muted">엑셀에서 환자 이름 목록(최대 100명 이상)을 복사해서 붙여넣으시면, 주민번호·보험유형·은행명·계좌번호·입금자명이 엑셀 표 형태로 즉시 출력됩니다.</p>
+                        </div>
+                        <div class="flex-center gap-2">
+                            <button class="btn btn-success" id="bulk-search-btn">
+                                <i class="fa-solid fa-bolt"></i> 100명 계좌/주민번호 일괄 조회
+                            </button>
+                            <button class="btn btn-outline" id="bulk-clear-btn">
+                                <i class="fa-solid fa-eraser"></i> 입력 지우기
+                            </button>
+                            <button class="btn btn-secondary" id="bulk-copy-clipboard-btn">
+                                <i class="fa-solid fa-paste"></i> 엑셀 복사 (Ctrl+V용)
+                            </button>
+                            <button class="btn btn-primary" id="bulk-export-csv-btn">
+                                <i class="fa-solid fa-file-excel"></i> 엑셀(CSV) 다운로드
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="bulk-search-grid">
+                            <!-- Left: Input Area -->
+                            <div class="bulk-input-area">
+                                <label for="bulk-names-input" class="required-label font-weight-bold mb-2">
+                                    <i class="fa-solid fa-file-import"></i> 환자 이름 목록 붙여넣기 (줄바꿈/쉼표로 구분)
+                                </label>
+                                <textarea id="bulk-names-input" class="form-control bulk-textarea" placeholder="엑셀에서 환자 이름 열을 복사하여(Ctrl+C) 여기에 붙여넣으세요(Ctrl+V).&#10;&#10;예시:&#10;김춘자&#10;송창우&#10;서윤화&#10;정순애&#10;오세민&#10;김명희&#10;황정용"></textarea>
+                            </div>
+
+                            <!-- Right: Result Summary & Grid -->
+                            <div class="bulk-output-area">
+                                <div class="flex-between mb-2">
+                                    <span class="font-weight-bold"><i class="fa-solid fa-table-list"></i> 일괄 조회 결과 엑셀 표</span>
+                                    <span id="bulk-result-badge" class="badge badge-info">조회 대기 중</span>
+                                </div>
+
+                                <div class="table-responsive bulk-table-wrapper border rounded">
+                                    <table class="data-table sticky-header">
+                                        <thead>
+                                            <tr>
+                                                <th>No.</th>
+                                                <th>검색 성명</th>
+                                                <th>매칭 환자명</th>
+                                                <th>주민등록번호</th>
+                                                <th>보험유형</th>
+                                                <th>은행명</th>
+                                                <th>계좌번호</th>
+                                                <th>입금자명</th>
+                                                <th>연락처</th>
+                                                <th>병동</th>
+                                                <th>동명이인 / 조회상태</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="bulk-results-table-body">
+                                            <tr>
+                                                <td colspan="11" class="text-center text-muted p-5">
+                                                    <i class="fa-solid fa-paste fa-3x mb-3 text-muted"></i><br>
+                                                    왼쪽 상자에 환자 이름들을 붙여넣으시고<br>
+                                                    <strong>[⚡ 100명 계좌/주민번호 일괄 조회]</strong> 버튼을 클릭하세요.
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 5. GOOGLE APPS SCRIPT TAB -->
             <section id="script-tab" class="tab-content">
                 <div class="card mb-4">
                     <div class="card-header">

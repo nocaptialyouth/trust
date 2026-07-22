@@ -8,6 +8,7 @@ const PUBLIC_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT
 const state = {
     masterPatients: [],
     transactions: [],
+    bulkResults: [],
     filters: {
         search: '',
         insurance: '',
@@ -35,6 +36,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initPaginationEvents();
     initModalEvents();
     initDashboardQuickSearch();
+    initBulkSearchEvents();
     initUtilities();
     renderAll();
 
@@ -48,7 +50,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 /* --------------------------------------------------------------------------
-   1. Initial Data Loading & Persistence (Sorted by Submit Date Descending)
+   1. Initial Data Loading & Persistence
    -------------------------------------------------------------------------- */
 function loadInitialData() {
     state.gasAppUrl = localStorage.getItem('care_fee_gas_url') || '';
@@ -95,32 +97,32 @@ function sortTransactions(txList, sortBy) {
         if (sortBy === 'submitDate-desc') {
             const dateA = a.submitDate || a.treatmentDate || '';
             const dateB = b.submitDate || b.treatmentDate || '';
-            if (dateA !== dateB) return dateB.localeCompare(dateA); // Newest submit date first
+            if (dateA !== dateB) return dateB.localeCompare(dateA);
             return (b.id || '').localeCompare(a.id || '');
         }
         if (sortBy === 'submitDate-asc') {
             const dateA = a.submitDate || a.treatmentDate || '';
             const dateB = b.submitDate || b.treatmentDate || '';
-            if (dateA !== dateB) return dateA.localeCompare(dateB); // Oldest submit date first
+            if (dateA !== dateB) return dateA.localeCompare(dateB);
             return (a.id || '').localeCompare(b.id || '');
         }
         if (sortBy === 'treatmentDate-desc' || sortBy === 'date-desc') {
             const dateA = a.treatmentDate || a.submitDate || '';
             const dateB = b.treatmentDate || b.submitDate || '';
-            if (dateA !== dateB) return dateB.localeCompare(dateA); // Newest treatment date first
+            if (dateA !== dateB) return dateB.localeCompare(dateA);
             return (b.id || '').localeCompare(a.id || '');
         }
         if (sortBy === 'treatmentDate-asc' || sortBy === 'date-asc') {
             const dateA = a.treatmentDate || a.submitDate || '';
             const dateB = b.treatmentDate || b.submitDate || '';
-            if (dateA !== dateB) return dateA.localeCompare(dateB); // Oldest treatment date first
+            if (dateA !== dateB) return dateA.localeCompare(dateB);
             return (a.id || '').localeCompare(b.id || '');
         }
         if (sortBy === 'amount-desc') {
-            return (b.amount || 0) - (a.amount || 0); // Highest amount first
+            return (b.amount || 0) - (a.amount || 0);
         }
         if (sortBy === 'amount-asc') {
-            return (a.amount || 0) - (b.amount || 0); // Lowest amount first
+            return (a.amount || 0) - (b.amount || 0);
         }
         return 0;
     });
@@ -190,7 +192,6 @@ async function fetchLiveGoogleSheetData(isManual = false) {
         showToast('구글 스프레드시트 최신 수납 데이터 동기화를 진행합니다...', 'info');
     }
 
-    // 1. Apps Script Endpoint Sync if configured
     if (state.gasAppUrl) {
         try {
             const response = await fetch(state.gasAppUrl);
@@ -213,7 +214,6 @@ async function fetchLiveGoogleSheetData(isManual = false) {
         }
     }
 
-    // 2. Direct Public CSV Endpoint Sync (Auto-Sync from Published Google Spreadsheet)
     try {
         const csvRes = await fetch(PUBLIC_SHEET_CSV_URL);
         if (csvRes.ok) {
@@ -240,7 +240,6 @@ function parsePublicCSVAndSync(csvText) {
         const line = lines[i].trim();
         if (!line) continue;
 
-        // Custom CSV Split handling quoted values with commas
         const cols = splitCSVLine(line);
         if (cols[1] && cols[1].trim() !== '') {
             newTx.push({
@@ -268,13 +267,11 @@ function parsePublicCSVAndSync(csvText) {
     }
 
     if (newTx.length > 0) {
-        // Merge user added transactions with live sheet rows
         const savedUserTxs = localStorage.getItem('care_fee_user_txs');
         let userTxs = savedUserTxs ? JSON.parse(savedUserTxs) : [];
 
         let merged = [...userTxs, ...newTx];
         
-        // Remove duplicate transaction entries
         const uniqueTx = [];
         const seenKeys = new Set();
         merged.forEach(item => {
@@ -474,7 +471,6 @@ function initFormEvents() {
         document.getElementById('tx-submit-date').value = todayStr;
         state.selectedPatientForForm = null;
 
-        // Re-sort with newest submit date first
         state.transactions = sortTransactions(state.transactions, state.filters.sortBy);
 
         renderAll();
@@ -527,7 +523,215 @@ function highlightMatch(text, query) {
 }
 
 /* --------------------------------------------------------------------------
-   4. Rendering Logic & Dashboard Features
+   4. NEW FEATURE: 5th TAB (Batch 100-Name Patient & Account Lookup)
+   -------------------------------------------------------------------------- */
+function initBulkSearchEvents() {
+    const searchBtn = document.getElementById('bulk-search-btn');
+    const clearBtn = document.getElementById('bulk-clear-btn');
+    const copyBtn = document.getElementById('bulk-copy-clipboard-btn');
+    const exportBtn = document.getElementById('bulk-export-csv-btn');
+    const inputArea = document.getElementById('bulk-names-input');
+    const tbody = document.getElementById('bulk-results-table-body');
+    const badge = document.getElementById('bulk-result-badge');
+
+    if (!searchBtn || !inputArea || !tbody) return;
+
+    searchBtn.addEventListener('click', () => {
+        const rawText = inputArea.value.trim();
+        if (!rawText) {
+            showToast('조회할 환자 이름 목록을 상자에 붙여넣어 주세요.', 'info');
+            return;
+        }
+
+        // Split input by newlines, commas, or tabs
+        const nameList = rawText.split(/[\n,\t]+/).map(n => n.trim()).filter(n => n.length > 0);
+
+        if (nameList.length === 0) {
+            showToast('올바른 환자 이름 목록이 없습니다.', 'info');
+            return;
+        }
+
+        showToast(`총 ${nameList.length}명의 환자 계좌/주민번호 일괄 조회를 진행합니다...`, 'info');
+
+        const results = [];
+        let seq = 1;
+
+        nameList.forEach(inputName => {
+            // Search master patients
+            const matches = state.masterPatients.filter(p => 
+                p.name === inputName || 
+                p.name.startsWith(inputName + '(') ||
+                p.name.replace(/\([A-Z]\)/, '').trim() === inputName
+            );
+
+            if (matches.length === 1) {
+                const p = matches[0];
+                results.push({
+                    no: seq++,
+                    searchName: inputName,
+                    matchedName: p.name,
+                    residentNo: p.residentNo || '',
+                    insuranceType: p.insuranceType || '',
+                    bank: p.bank || '',
+                    account: p.account || '',
+                    depositor: p.depositor || '',
+                    contact: p.contact || '',
+                    ward: p.ward || '',
+                    status: '정상 매칭',
+                    statusType: 'success'
+                });
+            } else if (matches.length > 1) {
+                // Duplicate patients
+                matches.forEach(p => {
+                    results.push({
+                        no: seq++,
+                        searchName: inputName,
+                        matchedName: p.name,
+                        residentNo: p.residentNo || '',
+                        insuranceType: p.insuranceType || '',
+                        bank: p.bank || '',
+                        account: p.account || '',
+                        depositor: p.depositor || '',
+                        contact: p.contact || '',
+                        ward: p.ward || '',
+                        status: `⚠️ 동명이인 ${matches.length}명 존재`,
+                        statusType: 'warning'
+                    });
+                });
+            } else {
+                // Not found
+                results.push({
+                    no: seq++,
+                    searchName: inputName,
+                    matchedName: '-',
+                    residentNo: '-',
+                    insuranceType: '-',
+                    bank: '-',
+                    account: '-',
+                    depositor: '-',
+                    contact: '-',
+                    ward: '-',
+                    status: '❌ 마스터 미등록 환자',
+                    statusType: 'danger'
+                });
+            }
+        });
+
+        state.bulkResults = results;
+        renderBulkSearchResults(results, nameList.length);
+    });
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            inputArea.value = '';
+            state.bulkResults = [];
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="11" class="text-center text-muted p-5">
+                        <i class="fa-solid fa-paste fa-3x mb-3 text-muted"></i><br>
+                        왼쪽 상자에 환자 이름들을 붙여넣으시고<br>
+                        <strong>[⚡ 100명 계좌/주민번호 일괄 조회]</strong> 버튼을 클릭하세요.
+                    </td>
+                </tr>
+            `;
+            if (badge) {
+                badge.className = 'badge badge-info';
+                badge.textContent = '조회 대기 중';
+            }
+        });
+    }
+
+    if (copyBtn) {
+        copyBtn.addEventListener('click', () => {
+            if (!state.bulkResults || state.bulkResults.length === 0) {
+                alert('복사할 일괄 조회 결과가 없습니다. 먼저 조회를 진행해 주세요.');
+                return;
+            }
+
+            // Tab Separated Values (TSV) format for Excel Paste (Ctrl+V)
+            const headers = ['No.', '검색성명', '매칭환자명', '주민등록번호', '보험유형', '은행명', '계좌번호', '입금자명', '연락처', '병동', '조회상태'];
+            const rows = state.bulkResults.map(r => [
+                r.no, r.searchName, r.matchedName, r.residentNo, r.insuranceType, r.bank, r.account, r.depositor, r.contact, r.ward, r.status
+            ]);
+
+            const tsvContent = [headers.join('\t'), ...rows.map(r => r.join('\t'))].join('\n');
+            navigator.clipboard.writeText(tsvContent).then(() => {
+                showToast('일괄 조회 결과가 엑셀 클립보드에 복사되었습니다! 엑셀 시트에 Ctrl+V 하시면 바로 들어갑니다.', 'success');
+            });
+        });
+    }
+
+    if (exportBtn) {
+        exportBtn.addEventListener('click', exportBulkToCSV);
+    }
+}
+
+function renderBulkSearchResults(results, searchCount) {
+    const tbody = document.getElementById('bulk-results-table-body');
+    const badge = document.getElementById('bulk-result-badge');
+
+    if (badge) {
+        badge.className = 'badge badge-success';
+        badge.textContent = `검색 ${searchCount}명 ➔ 결과 ${results.length}건 출력 완료`;
+    }
+
+    tbody.innerHTML = results.map(r => `
+        <tr class="${r.statusType === 'danger' ? 'bg-error-row' : ''}">
+            <td>${r.no}</td>
+            <td><strong>${escapeHtml(r.searchName)}</strong></td>
+            <td><strong>${escapeHtml(r.matchedName)}</strong></td>
+            <td><code>${escapeHtml(r.residentNo)}</code></td>
+            <td>${escapeHtml(r.insuranceType)}</td>
+            <td>${escapeHtml(r.bank)}</td>
+            <td><strong style="color:var(--primary-color)">${escapeHtml(r.account)}</strong></td>
+            <td>${escapeHtml(r.depositor)}</td>
+            <td>${escapeHtml(r.contact)}</td>
+            <td><span class="badge badge-info">${escapeHtml(r.ward)}</span></td>
+            <td>
+                ${r.statusType === 'success' ? '<span class="badge badge-success"><i class="fa-solid fa-check"></i> 매칭완료</span>' : ''}
+                ${r.statusType === 'warning' ? `<span class="badge badge-warning" style="background:#fef08a; color:#854d0e;">${escapeHtml(r.status)}</span>` : ''}
+                ${r.statusType === 'danger' ? '<span class="badge badge-danger"><i class="fa-solid fa-xmark"></i> 미등록</span>' : ''}
+            </td>
+        </tr>
+    `).join('');
+}
+
+function exportBulkToCSV() {
+    if (!state.bulkResults || state.bulkResults.length === 0) {
+        alert('내보낼 일괄 조회 결과가 없습니다.');
+        return;
+    }
+
+    const headers = ['No', '검색성명', '매칭환자명', '주민등록번호', '보험유형', '은행명', '계좌번호', '입금자명', '연락처', '병동', '조회상태'];
+    const rows = state.bulkResults.map(r => [
+        r.no,
+        `"${r.searchName}"`,
+        `"${r.matchedName}"`,
+        `"${r.residentNo}"`,
+        `"${r.insuranceType}"`,
+        `"${r.bank}"`,
+        `"${r.account}"`,
+        `"${r.depositor}"`,
+        `"${r.contact}"`,
+        `"${r.ward}"`,
+        `"${r.status}"`
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `다중환자_계좌조회결과_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast('일괄 조회 결과가 엑셀 호환 CSV 파일로 다운로드되었습니다.', 'success');
+}
+
+/* --------------------------------------------------------------------------
+   5. Rendering Logic & Dashboard Features
    -------------------------------------------------------------------------- */
 function renderAll() {
     renderDashboardStats();
@@ -542,13 +746,11 @@ function renderDashboardStats() {
     const auditCount = state.transactions.filter(tx => tx.auditChecked).length;
     const errorCount = state.transactions.filter(tx => tx.isError).length;
 
-    // Calculate This Week's Submissions (Monday to Sunday)
     const { weeklyCount, weeklyAmount, mondayStr, sundayStr } = calculateThisWeekSubmissions();
 
     document.getElementById('stat-total-amount').textContent = '₩' + totalAmount.toLocaleString();
     document.getElementById('stat-total-count').textContent = state.transactions.length.toLocaleString();
     
-    // Weekly Submission Stat Card
     document.getElementById('stat-weekly-count').textContent = weeklyCount.toLocaleString() + '건';
     document.getElementById('stat-weekly-range').textContent = `이번 주 (${mondayStr} ~ ${sundayStr}) ₩${weeklyAmount.toLocaleString()}`;
 
@@ -561,7 +763,7 @@ function renderDashboardStats() {
 
 function calculateThisWeekSubmissions() {
     const now = new Date();
-    const currentDay = now.getDay(); // 0 is Sunday, 1 is Monday...
+    const currentDay = now.getDay();
     const diffToMonday = (currentDay === 0 ? -6 : 1 - currentDay);
     
     const monday = new Date(now);
@@ -595,7 +797,6 @@ function calculateThisWeekSubmissions() {
     };
 }
 
-/* Dashboard Feature 1: Quick Patient & Account Instant Search */
 function initDashboardQuickSearch() {
     const searchInput = document.getElementById('dashboard-patient-search');
     const resultsContainer = document.getElementById('dashboard-patient-search-results');
@@ -693,7 +894,6 @@ function renderLedgerTable() {
     const tbody = document.getElementById('ledger-table-body');
     const filteredCountBadge = document.getElementById('filtered-tx-count');
 
-    // Filter
     const filtered = state.transactions.filter(tx => {
         if (state.filters.search) {
             const q = state.filters.search.toLowerCase();
@@ -715,7 +915,6 @@ function renderLedgerTable() {
         return true;
     });
 
-    // Apply Sort
     const sortedFiltered = sortTransactions(filtered, state.filters.sortBy);
 
     filteredCountBadge.textContent = `전체 ${state.transactions.length.toLocaleString()}건 중 ${sortedFiltered.length.toLocaleString()}건 표시`;
@@ -903,7 +1102,7 @@ function initPaginationEvents() {
 }
 
 /* --------------------------------------------------------------------------
-   5. Interactive Actions & Handlers
+   6. Interactive Actions & Handlers
    -------------------------------------------------------------------------- */
 window.toggleTxStatus = function(txId, field) {
     const tx = state.transactions.find(t => t.id === txId);
@@ -993,7 +1192,7 @@ function initFilterEvents() {
 }
 
 /* --------------------------------------------------------------------------
-   6. Modals (Disambiguation & Master Add Patient)
+   7. Modals (Disambiguation & Master Add Patient)
    -------------------------------------------------------------------------- */
 function initModalEvents() {
     const disModal = document.getElementById('disambiguation-modal');
@@ -1108,7 +1307,7 @@ function openDisambiguationModal(patients) {
 }
 
 /* --------------------------------------------------------------------------
-   7. Excel & CSV Export Utilities
+   8. Excel & CSV Export Utilities
    -------------------------------------------------------------------------- */
 function initUtilities() {
     const exportBtn = document.getElementById('export-excel-btn');
