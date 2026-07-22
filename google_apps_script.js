@@ -1,5 +1,5 @@
 /**
- * Google Apps Script Code for Google Sheets Integration (5356행부터 자동 채움 완결판)
+ * Google Apps Script Code for Google Sheets Integration (5359행부터 자동 채움 완결판)
  * Copy and paste this code into [Extensions] > [Apps Script] in Google Sheets!
  */
 
@@ -8,7 +8,7 @@ const GOOGLE_APPS_SCRIPT_CODE = `
  * 위탁진료비 수납 및 환자계좌 관리 Google Apps Script
  * - 25~26년 시트 환자명 입력 시 [추가(A,B찾기)] 시트에서 계좌/주민번호 자동 채움
  * - 동명이인(김춘자(A), 김춘자(B) 등) 감지 시 자동 안내
- * - 5356행부터 순차 자동 입력 (doGet / doPost) 지원
+ * - 5359행부터 순차 자동 입력 (doGet / doPost) 지원
  */
 
 // 1. 메뉴 생성 (상단 툴바 메뉴)
@@ -216,7 +216,7 @@ function formatDate(val) {
   return String(val);
 }
 
-// 7. 웹 앱 실시간 백업 API (doPost) - 5356행부터 (기존 5,351건 수납 내역 바로 아래 첫 빈 행) 자동 채움
+// 7. 웹 앱 실시간 백업 API (doPost) - 5359행부터 (기존 5,358건 수납 내역 바로 아래 첫 빈 행) 자동 채움
 function doPost(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -228,14 +228,14 @@ function doPost(e) {
       
       var t = data.transaction;
       
-      // B열(환자성명) 기준으로 데이터가 채워진 마지막 행 바로 다음 첫 빈 행(예: 5356행) 검색
+      // B열(환자성명) 기준으로 데이터가 채워진 마지막 행 바로 다음 첫 빈 행(5359행) 검색
       var lastRow = sheet.getLastRow();
-      var targetRow = 5356; // Default to 5356
+      var targetRow = 5359; // Default to 5359
       
-      var bValues = sheet.getRange(1, 2, Math.max(lastRow + 20, 5400), 1).getValues();
+      var bValues = sheet.getRange(1, 2, Math.max(lastRow + 20, 5450), 1).getValues();
       for (var r = 3; r < bValues.length; r++) {
         if (!bValues[r][0] || String(bValues[r][0]).trim() === '') {
-          targetRow = r + 1;
+          targetRow = Math.max(r + 1, 5359);
           break;
         }
       }
@@ -297,7 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (copyBtn) {
         copyBtn.addEventListener('click', () => {
             navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_CODE.trim()).then(() => {
-                alert('5356행부터 자동 채워지는 최신 매크로 코드가 클립보드에 복사되었습니다!\n\n구글 시트의 [확장 프로그램] > [Apps Script]에 붙여넣고 저장해 주세요.');
+                alert('5359행부터 자동 채워지는 최신 매크로 코드가 클립보드에 복사되었습니다!\n\n구글 시트의 [확장 프로그램] > [Apps Script]에 붙여넣고 저장해 주세요.');
             });
         });
     }
