@@ -1,13 +1,13 @@
 /**
- * Google Apps Script Code for Google Sheets Integration (I열 이후 자동 채움 완결판)
+ * Google Apps Script Code for Google Sheets Integration (삭제 자동 연동 완결판)
  * Copy and paste this code into [Extensions] > [Apps Script] in Google Sheets!
  */
 
 const GOOGLE_APPS_SCRIPT_CODE = `
 /**
  * 위탁진료비 수납 및 환자계좌 관리 Google Apps Script
- * - 25~26년 시트 B~H열만 기입되면 I열부터(주민번호, 보험유형, 은행명, 계좌번호, 입금자명, 연락처) [추가(A,B찾기)] 마스터 시트에서 1초 만에 자동 채움
- * - 5359행부터 순차 자동 입력 지원
+ * - 웹사이트에서 🗑️ 삭제 클릭 시 구글시트 행 실시간 자동 삭제 지원
+ * - 25~26년 시트 B~H열 기입 시 I열부터 마스터 시트 자동 채움
  */
 
 // 1. 메뉴 생성 (상단 툴바 메뉴)
@@ -215,19 +215,18 @@ function formatDate(val) {
   return String(val);
 }
 
-// 7. 웹 앱 실시간 백업 API (doPost) - B~H열만 입력, I열부터는 마스터에서 자동 채움
+// 7. 웹 앱 실시간 백업 및 삭제 API (doPost)
 function doPost(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var data = JSON.parse(e.postData.contents);
     
+    // 7-1. 수납 건 추가
     if (data.action === 'addTransaction') {
       var sheet = ss.getSheetByName('25~26년');
       if (!sheet) sheet = ss.insertSheet('25~26년');
       
       var t = data.transaction;
-      
-      // B열(환자성명) 기준으로 데이터가 채워진 마지막 행 바로 다음 첫 빈 행(5359행) 검색
       var lastRow = sheet.getLastRow();
       var targetRow = 5359;
       
@@ -239,29 +238,61 @@ function doPost(e) {
         }
       }
       
-      // B~H열만 기입 (I열부터는 입력 안함 -> autoFillAccountForSingleRow에서 자동 처리)
       var newRow = [
         '', t.patientName, t.treatmentDate, t.submitDate, t.amount, t.inCharge, t.hospital, t.submitter
       ];
       
       sheet.getRange(targetRow, 1, 1, newRow.length).setValues([newRow]);
-      
-      // I열부터(주민번호, 보험유형, 은행명, 계좌번호, 입금자명, 연락처) 자동 채우기 실행
       autoFillAccountForSingleRow(sheet, targetRow, t.patientName);
       
       return ContentService.createTextOutput(JSON.stringify({
         status: 'success',
-        message: '구글시트 25~26년 시트 ' + targetRow + '행 B~H열 저장 및 I열부터 마스터 자동입력이 완료되었습니다.'
+        message: '구글시트 25~26년 시트 ' + targetRow + '행에 저장되었습니다.'
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 7-2. 수납 건 실시간 삭제 (웹사이트 🗑️ 삭제 버튼 클릭 시 구글시트 행 삭제)
+    if (data.action === 'deleteTransaction') {
+      var sheet = ss.getSheetByName('25~26년');
+      if (!sheet) return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Sheet not found' })).setMimeType(ContentService.MimeType.JSON);
+      
+      var t = data.transaction;
+      var lastRow = sheet.getLastRow();
+      if (lastRow < 4) return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: 'No rows' })).setMimeType(ContentService.MimeType.JSON);
+      
+      var dataRange = sheet.getRange(4, 1, lastRow - 3, 6).getValues();
+      var deletedRowIndex = -1;
+      
+      for (var k = dataRange.length - 1; k >= 0; k--) {
+        var rName = String(dataRange[k][1]).trim();
+        var rTreatDate = formatDate(dataRange[k][2]);
+        var rSubmitDate = formatDate(dataRange[k][3]);
+        var rAmount = parseFloat(dataRange[k][4]) || 0;
+        
+        if (rName === String(t.patientName).trim() &&
+            (rSubmitDate === String(t.submitDate) || rTreatDate === String(t.treatmentDate)) &&
+            Math.abs(rAmount - (parseFloat(t.amount) || 0)) < 1) {
+          
+          sheet.deleteRow(k + 4);
+          deletedRowIndex = k + 4;
+          break;
+        }
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: deletedRowIndex > 0 ? '구글시트 ' + deletedRowIndex + '행이 실시간 삭제되었습니다.' : '일치 행 없음'
       })).setMimeType(ContentService.MimeType.JSON);
     }
     
+    // 7-3. 마스터 환자 신규 추가
     if (data.action === 'addMasterPatient') {
       var sheet = ss.getSheetByName('추가(A,B찾기)');
       if (!sheet) sheet = ss.insertSheet('추가(A,B찾기)');
       
       var p = data.patient;
       var lastRow = sheet.getLastRow();
-      var targetRow = 575; // Default after 574 (최지은)
+      var targetRow = 575;
       
       var bValues = sheet.getRange(1, 2, Math.max(lastRow + 20, 600), 1).getValues();
       for (var r = 2; r < bValues.length; r++) {
@@ -278,8 +309,27 @@ function doPost(e) {
       
       return ContentService.createTextOutput(JSON.stringify({
         status: 'success',
-        message: '구글시트 추가(A,B찾기) 시트 ' + targetRow + '행에 자동 저장되었습니다.'
+        message: '구글시트 추가(A,B찾기) 시트 ' + targetRow + '행에 저장되었습니다.'
       })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 7-4. 마스터 환자 삭제
+    if (data.action === 'deleteMasterPatient') {
+      var sheet = ss.getSheetByName('추가(A,B찾기)');
+      if (!sheet) return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Sheet not found' })).setMimeType(ContentService.MimeType.JSON);
+      
+      var pName = String(data.name).trim();
+      var lastRow = sheet.getLastRow();
+      if (lastRow < 3) return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: 'No rows' })).setMimeType(ContentService.MimeType.JSON);
+      
+      var masterValues = sheet.getRange(3, 2, lastRow - 2, 1).getValues();
+      for (var m = masterValues.length - 1; m >= 0; m--) {
+        if (String(masterValues[m][0]).trim() === pName) {
+          sheet.deleteRow(m + 3);
+          break;
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: '마스터 환자 삭제 완료' })).setMimeType(ContentService.MimeType.JSON);
     }
     
     return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Unknown action' })).setMimeType(ContentService.MimeType.JSON);
@@ -299,7 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (copyBtn) {
         copyBtn.addEventListener('click', () => {
             navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_CODE.trim()).then(() => {
-                alert('I열부터 마스터에서 자동 채워지는 최신 매크로 코드가 클립보드에 복사되었습니다!\n\n구글 시트의 [확장 프로그램] > [Apps Script]에 붙여넣고 저장해 주세요.');
+                alert('삭제 자동 연동 기능이 탑재된 최신 매크로 코드가 클립보드에 복사되었습니다!\n\n구글 시트의 [확장 프로그램] > [Apps Script]에 붙여넣고 저장해 주세요.');
             });
         });
     }

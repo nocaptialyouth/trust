@@ -3,7 +3,7 @@
    ========================================================================== */
 
 const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyi0iJclzJWDK1fSEnzSa1AGDHD_YeSlsj9J82XEMTl26UF9EPatP1jv0iJCrpdrghK/exec';
-const PUBLIC_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTglnQ5SSB6mtD3tERFLwtNl8HST0Hwd_jU-XHMTERzher8RSLxTWVOSRfZtPJoTT4xFbriKMF6HHqK/pub?output=csv';
+const PUBLIC_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTglnQ5SSB6mtD3tERFLwtNl8HST0Hwd_jU-XHMTERzher8RSLxTWVOSRfZtPJoTT4xFbariKMF6HHqK/pub?output=csv';
 
 // Global Application State
 const state = {
@@ -459,7 +459,7 @@ function initFormEvents() {
             adminChecked: false,
             auditChecked: false,
             isError: false,
-            isNew: true // Highlight as newly added
+            isNew: true
         };
 
         state.lastAddedTx = newTx;
@@ -1007,7 +1007,7 @@ function renderLedgerTable() {
                 </button>
             </td>
             <td>
-                <button class="btn btn-sm btn-outline text-danger" onclick="deleteTransaction('${tx.id}')">
+                <button class="btn btn-sm btn-outline text-danger" onclick="deleteTransaction('${tx.id}')" title="구글시트에서도 자동 삭제">
                     <i class="fa-solid fa-trash"></i>
                 </button>
             </td>
@@ -1158,19 +1158,67 @@ window.toggleTxStatus = function(txId, field) {
     }
 };
 
+// 🗑️ 수납 내역 삭제 (웹 장부 및 구글 시트 25~26년 실시간 동시 삭제)
 window.deleteTransaction = function(txId) {
-    if (confirm('해당 수납 내역을 삭제하시겠습니까?')) {
+    const txToDelete = state.transactions.find(t => t.id === txId);
+    const pName = txToDelete ? txToDelete.patientName : '해당';
+
+    if (confirm(`[${pName}] 님의 수납 내역을 삭제하시겠습니까?\n(웹장부 및 구글 스프레드시트 25~26년 시트에서 동시 실시간 삭제됩니다)`)) {
         state.transactions = state.transactions.filter(t => t.id !== txId);
+        
+        try {
+            const saved = localStorage.getItem('care_fee_user_txs');
+            if (saved) {
+                let list = JSON.parse(saved);
+                list = list.filter(t => t.id !== txId && `${t.patientName}_${t.submitDate}_${t.amount}` !== `${txToDelete.patientName}_${txToDelete.submitDate}_${txToDelete.amount}`);
+                localStorage.setItem('care_fee_user_txs', JSON.stringify(list));
+            }
+        } catch (e) {}
+
+        // 구글 시트 행 삭제 API 전송
+        if (state.gasAppUrl && txToDelete) {
+            syncToGoogleSheet({
+                action: 'deleteTransaction',
+                transaction: {
+                    patientName: txToDelete.patientName,
+                    treatmentDate: txToDelete.treatmentDate,
+                    submitDate: txToDelete.submitDate,
+                    amount: txToDelete.amount
+                }
+            });
+        }
+
         renderAll();
-        showToast('수납 내역이 삭제되었습니다.', 'info');
+        showToast(`[${pName}] 님 수납 내역이 웹 장부 및 구글 시트에서 실시간 삭제되었습니다.`, 'info');
     }
 };
 
+// 🗑️ 환자 마스터 삭제 (웹 장부 및 구글 시트 추가(A,B찾기) 동시 삭제)
 window.deleteMasterPatient = function(pId) {
-    if (confirm('해당 환자 마스터 정보를 삭제하시겠습니까?')) {
+    const pToDelete = state.masterPatients.find(p => p.id === pId);
+    const pName = pToDelete ? pToDelete.name : '해당';
+
+    if (confirm(`[${pName}] 환자 마스터 정보를 삭제하시겠습니까?\n(웹장부 및 구글 스프레드시트 마스터 시트에서 동시 삭제됩니다)`)) {
         state.masterPatients = state.masterPatients.filter(p => p.id !== pId);
+        
+        try {
+            const saved = localStorage.getItem('care_fee_user_masters');
+            if (saved) {
+                let list = JSON.parse(saved);
+                list = list.filter(p => p.id !== pId);
+                localStorage.setItem('care_fee_user_masters', JSON.stringify(list));
+            }
+        } catch (e) {}
+
+        if (state.gasAppUrl && pToDelete) {
+            syncToGoogleSheet({
+                action: 'deleteMasterPatient',
+                name: pToDelete.name
+            });
+        }
+
         renderAll();
-        showToast('환자 마스터 정보가 삭제되었습니다.', 'info');
+        showToast(`[${pName}] 환자 마스터 정보가 웹 장부 및 구글 시트에서 삭제되었습니다.`, 'info');
     }
 };
 
