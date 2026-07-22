@@ -37,6 +37,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     initDashboardQuickSearch();
     initUtilities();
     renderAll();
+
+    // Auto-fetch live Google Sheet data on page load
+    fetchLiveGoogleSheetData(false);
+
+    // Auto Background Sync Every 30 Seconds for Vercel <-> Google Sheet
+    setInterval(() => {
+        fetchLiveGoogleSheetData(false);
+    }, 30000);
 });
 
 /* --------------------------------------------------------------------------
@@ -182,6 +190,7 @@ async function fetchLiveGoogleSheetData(isManual = false) {
         showToast('구글 스프레드시트 최신 수납 데이터 동기화를 진행합니다...', 'info');
     }
 
+    // 1. Apps Script Endpoint Sync if configured
     if (state.gasAppUrl) {
         try {
             const response = await fetch(state.gasAppUrl);
@@ -195,7 +204,7 @@ async function fetchLiveGoogleSheetData(isManual = false) {
                         state.transactions = sortTransactions(data.transactions, state.filters.sortBy);
                     }
                     renderAll();
-                    showToast(`구글 시트 동기화 완료! (제출일자 최신순 정렬됨: 총 ${state.transactions.length.toLocaleString()}건)`, 'success');
+                    if (isManual) showToast(`구글 시트 동기화 완료! (제출일자 최신순 정렬됨: 총 ${state.transactions.length.toLocaleString()}건)`, 'success');
                     return;
                 }
             }
@@ -204,9 +213,101 @@ async function fetchLiveGoogleSheetData(isManual = false) {
         }
     }
 
+    // 2. Direct Public CSV Endpoint Sync (Auto-Sync from Published Google Spreadsheet)
+    try {
+        const csvRes = await fetch(PUBLIC_SHEET_CSV_URL);
+        if (csvRes.ok) {
+            const csvText = await csvRes.text();
+            parsePublicCSVAndSync(csvText);
+            if (isManual) showToast(`구글 시트 실시간 자동 동기화 완료! (총 ${state.transactions.length.toLocaleString()}건)`, 'success');
+            return;
+        }
+    } catch (e) {
+        console.log('Quiet CSV sync');
+    }
+
     loadInitialData();
     renderAll();
-    showToast(`25~26년 수납 데이터 총 ${state.transactions.length.toLocaleString()}건 (주간 제출 동기화 완료)`, 'success');
+}
+
+function parsePublicCSVAndSync(csvText) {
+    if (!csvText) return;
+    const lines = csvText.split('\n');
+    if (lines.length < 4) return;
+
+    const newTx = [];
+    for (let i = 3; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        // Custom CSV Split handling quoted values with commas
+        const cols = splitCSVLine(line);
+        if (cols[1] && cols[1].trim() !== '') {
+            newTx.push({
+                id: 'T_' + (i + 1),
+                patientName: cols[1].trim(),
+                treatmentDate: cols[2] ? cols[2].trim() : '',
+                submitDate: cols[3] ? cols[3].trim() : '',
+                amount: parseFloat(cols[4] ? cols[4].replace(/[^0-9.-]+/g, '') : 0) || 0,
+                inCharge: cols[5] ? cols[5].trim() : '',
+                hospital: cols[6] ? cols[6].trim() : '',
+                submitter: cols[7] ? cols[7].trim() : '',
+                residentNo: cols[8] ? cols[8].trim() : '',
+                insuranceType: cols[9] ? cols[9].trim() : '',
+                bank: cols[10] ? cols[10].trim() : '',
+                account: cols[11] ? cols[11].trim() : '',
+                depositor: cols[12] ? cols[12].trim() : '',
+                contact: cols[13] ? cols[13].trim() : '',
+                receiptCount: cols[14] ? cols[14].trim() : '1',
+                remarks: cols[15] ? cols[15].trim() : '',
+                adminChecked: false,
+                auditChecked: false,
+                isError: false
+            });
+        }
+    }
+
+    if (newTx.length > 0) {
+        // Merge user added transactions with live sheet rows
+        const savedUserTxs = localStorage.getItem('care_fee_user_txs');
+        let userTxs = savedUserTxs ? JSON.parse(savedUserTxs) : [];
+
+        let merged = [...userTxs, ...newTx];
+        
+        // Remove duplicate transaction entries
+        const uniqueTx = [];
+        const seenKeys = new Set();
+        merged.forEach(item => {
+            const key = `${item.patientName}_${item.treatmentDate}_${item.submitDate}_${item.amount}`;
+            if (!seenKeys.has(key)) {
+                seenKeys.add(key);
+                uniqueTx.push(item);
+            }
+        });
+
+        state.transactions = sortTransactions(uniqueTx, state.filters.sortBy);
+        renderAll();
+        updateSyncStatusBar();
+    }
+}
+
+function splitCSVLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+            inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+            result.push(current.replace(/^"|"$/g, ''));
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    result.push(current.replace(/^"|"$/g, ''));
+    return result;
 }
 
 function updateSyncStatusBar() {
@@ -215,7 +316,7 @@ function updateSyncStatusBar() {
     if (!bar || !text) return;
 
     bar.className = 'sync-banner success';
-    text.textContent = `🏥 25~26년 전체 수납 내역 (총 ${state.transactions.length.toLocaleString()}건) - 제출일자 최신순(2026년 7월 최신순)으로 정렬됨`;
+    text.textContent = `🏥 구글 시트 실시간 자동 동기화 활성화됨 (총 ${state.transactions.length.toLocaleString()}건 수납 데이터 - 30초 자동 갱신)`;
 }
 
 /* --------------------------------------------------------------------------
