@@ -757,14 +757,38 @@ function initTabNavigation() {
 /* --------------------------------------------------------------------------
    3. Smart Patient Autocomplete & Form Events
    -------------------------------------------------------------------------- */
+// Helper function to return local date string in YYYY-MM-DD format
+function getLocalDateStr(d) {
+    const target = d ? new Date(d) : new Date();
+    if (isNaN(target.getTime())) return '';
+    const year = target.getFullYear();
+    const month = String(target.getMonth() + 1).padStart(2, '0');
+    const day = String(target.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 function initFormEvents() {
     const patientInput = document.getElementById('tx-patient-name');
     const dropdown = document.getElementById('patient-autocomplete-dropdown');
     const txForm = document.getElementById('add-transaction-form');
+    const setTodayDateBtn = document.getElementById('set-today-date-btn');
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    document.getElementById('tx-treatment-date').value = todayStr;
-    document.getElementById('tx-submit-date').value = todayStr;
+    const autoSetTodayDates = () => {
+        const todayStr = getLocalDateStr();
+        const treatmentDateInput = document.getElementById('tx-treatment-date');
+        const submitDateInput = document.getElementById('tx-submit-date');
+        if (treatmentDateInput) treatmentDateInput.value = todayStr;
+        if (submitDateInput) submitDateInput.value = todayStr;
+    };
+
+    autoSetTodayDates();
+
+    if (setTodayDateBtn) {
+        setTodayDateBtn.addEventListener('click', () => {
+            autoSetTodayDates();
+            showToast(`진료일자/제출일자가 오늘 날짜(${getLocalDateStr()})로 자동 세팅되었습니다.`, 'info');
+        });
+    }
 
     patientInput.addEventListener('input', (e) => {
         const query = e.target.value.trim();
@@ -830,11 +854,12 @@ function initFormEvents() {
         const name = patientInput.value.trim();
         if (!name) return;
 
+        const todayStr = getLocalDateStr();
         const newTx = {
             id: 'T_' + Date.now(),
             patientName: name,
-            treatmentDate: document.getElementById('tx-treatment-date').value,
-            submitDate: document.getElementById('tx-submit-date').value,
+            treatmentDate: document.getElementById('tx-treatment-date').value || todayStr,
+            submitDate: document.getElementById('tx-submit-date').value || todayStr,
             amount: parseFloat(document.getElementById('tx-amount').value) || 0,
             inCharge: document.getElementById('tx-in-charge').value.trim(),
             hospital: document.getElementById('tx-hospital').value.trim(),
@@ -863,8 +888,7 @@ function initFormEvents() {
         }
 
         txForm.reset();
-        document.getElementById('tx-treatment-date').value = todayStr;
-        document.getElementById('tx-submit-date').value = todayStr;
+        autoSetTodayDates();
         state.selectedPatientForForm = null;
 
         state.transactions = sortTransactions(state.transactions, state.filters.sortBy);
@@ -1157,7 +1181,7 @@ function exportBulkToCSV() {
 
     const a = document.createElement('a');
     a.href = url;
-    a.download = `다중환자_계좌조회결과_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `다중환자_계좌조회결과_${getLocalDateStr()}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1206,8 +1230,8 @@ function calculateThisWeekSubmissions() {
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
 
-    const mondayISO = monday.toISOString().split('T')[0];
-    const sundayISO = sunday.toISOString().split('T')[0];
+    const mondayISO = getLocalDateStr(monday);
+    const sundayISO = getLocalDateStr(sunday);
 
     const mondayMMDD = (monday.getMonth() + 1).toString().padStart(2, '0') + '.' + monday.getDate().toString().padStart(2, '0');
     const sundayMMDD = (sunday.getMonth() + 1).toString().padStart(2, '0') + '.' + sunday.getDate().toString().padStart(2, '0');
@@ -1836,7 +1860,7 @@ function exportToCSV() {
 
     const a = document.createElement('a');
     a.href = url;
-    a.download = `위탁진료비_수납내역_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `위탁진료비_수납내역_${getLocalDateStr()}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

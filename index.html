@@ -223,11 +223,18 @@
 
                             <div class="form-row">
                                 <div class="form-group col-6">
-                                    <label for="tx-treatment-date" class="required-label">진료일자</label>
+                                    <div class="flex-between">
+                                        <label for="tx-treatment-date" class="required-label">진료일자</label>
+                                    </div>
                                     <input type="date" id="tx-treatment-date" class="form-control" required>
                                 </div>
                                 <div class="form-group col-6">
-                                    <label for="tx-submit-date" class="required-label">제출일자</label>
+                                    <div class="flex-between mb-1">
+                                        <label for="tx-submit-date" class="required-label">제출일자</label>
+                                        <button type="button" id="set-today-date-btn" class="btn btn-sm btn-outline text-primary py-0 px-1" style="font-size:0.75rem; border-color:var(--primary-color);" title="오늘 날짜로 자동 세팅">
+                                            <i class="fa-solid fa-calendar-day"></i> 오늘 날짜 세팅
+                                        </button>
+                                    </div>
                                     <input type="date" id="tx-submit-date" class="form-control" required>
                                 </div>
                             </div>
