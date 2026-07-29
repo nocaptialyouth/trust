@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 /* --------------------------------------------------------------------------
-   0. Authentication & Authorization (@gmail.com Restriction)
+   0. Authentication & Authorization (Master Admin: rkstmtk@gmail.com)
    -------------------------------------------------------------------------- */
 function initAuthSystem() {
     const authOverlay = document.getElementById('auth-modal-overlay');
@@ -62,11 +62,21 @@ function initAuthSystem() {
     const userInfoBar = document.getElementById('user-info-bar');
     const userDisplayName = document.getElementById('user-display-name');
     const logoutBtn = document.getElementById('logout-btn');
+    const adminPanelBtn = document.getElementById('admin-panel-btn');
+    const adminPendingBadge = document.getElementById('admin-pending-badge');
+    const adminModal = document.getElementById('admin-approval-modal');
+    const adminUserTbody = document.getElementById('admin-user-list-tbody');
 
     const authTabLogin = document.getElementById('auth-tab-login');
     const authTabSignup = document.getElementById('auth-tab-signup');
     const loginForm = document.getElementById('login-form');
     const signupForm = document.getElementById('signup-form');
+    const pendingApprovalBox = document.getElementById('pending-approval-box');
+    const pendingUserEmailText = document.getElementById('pending-user-email-text');
+    const checkApprovalStatusBtn = document.getElementById('check-approval-status-btn');
+    const pendingLogoutBtn = document.getElementById('pending-logout-btn');
+
+    const MASTER_ADMIN_EMAIL = 'rkstmtk@gmail.com';
 
     // Registered users dataset
     let registeredUsers = [];
@@ -79,14 +89,22 @@ function initAuthSystem() {
         console.error('Error loading registered users:', e);
     }
 
-    // Default admin account if list is empty
-    if (!registeredUsers || registeredUsers.length === 0) {
-        registeredUsers = [{
-            email: 'hospital.trust@gmail.com',
-            name: '원무팀 관리자',
+    // Ensure Master Admin rkstmtk@gmail.com exists and is approved
+    let masterUser = registeredUsers.find(u => u.email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase());
+    if (!masterUser) {
+        masterUser = {
+            email: MASTER_ADMIN_EMAIL,
+            name: '최고 관리자',
             password: 'admin',
+            status: 'approved',
+            role: 'admin',
             createdAt: new Date().toISOString()
-        }];
+        };
+        registeredUsers.unshift(masterUser);
+        localStorage.setItem('care_fee_registered_users', JSON.stringify(registeredUsers));
+    } else {
+        masterUser.status = 'approved';
+        masterUser.role = 'admin';
         localStorage.setItem('care_fee_registered_users', JSON.stringify(registeredUsers));
     }
 
@@ -94,7 +112,9 @@ function initAuthSystem() {
     try {
         const savedAuth = localStorage.getItem('care_fee_auth_user');
         if (savedAuth) {
-            state.currentUser = JSON.parse(savedAuth);
+            const parsed = JSON.parse(savedAuth);
+            const matched = registeredUsers.find(u => u.email.toLowerCase() === parsed.email.toLowerCase());
+            state.currentUser = matched || parsed;
         }
     } catch (e) {
         state.currentUser = null;
@@ -109,6 +129,7 @@ function initAuthSystem() {
             authTabSignup.classList.remove('active');
             loginForm.classList.remove('hidden');
             signupForm.classList.add('hidden');
+            if (pendingApprovalBox) pendingApprovalBox.classList.add('hidden');
         });
 
         authTabSignup.addEventListener('click', () => {
@@ -116,6 +137,7 @@ function initAuthSystem() {
             authTabLogin.classList.remove('active');
             signupForm.classList.remove('hidden');
             loginForm.classList.add('hidden');
+            if (pendingApprovalBox) pendingApprovalBox.classList.add('hidden');
         });
     }
 
@@ -143,14 +165,19 @@ function initAuthSystem() {
                 state.currentUser = foundUser;
                 localStorage.setItem('care_fee_auth_user', JSON.stringify(foundUser));
                 updateAuthUI();
-                showToast(`[${foundUser.name || foundUser.email}] 님 환영합니다! 위탁 수납 시스템에 접속되었습니다.`, 'success');
+
+                if (foundUser.email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase() || foundUser.status === 'approved') {
+                    showToast(`[${foundUser.name || foundUser.email}] 님 환영합니다! 위탁 수납 시스템에 접속되었습니다.`, 'success');
+                } else {
+                    showToast(`[${foundUser.name || foundUser.email}] 님은 rkstmtk@gmail.com 관리자 승인 대기 중입니다.`, 'info');
+                }
             } else {
                 alert('❌ 등록된 지메일 계정이 없거나 비밀번호가 올바르지 않습니다.\n[회원가입 (지메일)] 탭에서 가입 신청을 먼저 진행해 주세요.');
             }
         });
     }
 
-    // Sign Up Form Submit with Strict @gmail.com Domain Enforcement
+    // Sign Up Form Submit (New users set to pending approval by default)
     if (signupForm) {
         const signupEmailInput = document.getElementById('signup-email');
         const emailWarnText = document.getElementById('signup-email-warn');
@@ -167,7 +194,7 @@ function initAuthSystem() {
                 } else if (val && isValidGmail(val)) {
                     signupEmailInput.style.borderColor = '#10b981';
                     if (emailWarnText) {
-                        emailWarnText.textContent = '✓ 올바른 구글 지메일 주소입니다. 가입 가능합니다.';
+                        emailWarnText.textContent = '✓ 올바른 구글 지메일 주소입니다. 가입 신청 가능합니다.';
                         emailWarnText.style.color = '#10b981';
                     }
                 } else {
@@ -204,23 +231,61 @@ function initAuthSystem() {
                 return;
             }
 
+            const isMaster = (email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase());
             const newUser = {
                 email: email,
                 name: name,
                 password: password,
+                status: isMaster ? 'approved' : 'pending',
+                role: isMaster ? 'admin' : 'user',
                 createdAt: new Date().toISOString()
             };
 
             registeredUsers.push(newUser);
             localStorage.setItem('care_fee_registered_users', JSON.stringify(registeredUsers));
 
-            // Auto log in new registered user
+            // Set current session
             state.currentUser = newUser;
             localStorage.setItem('care_fee_auth_user', JSON.stringify(newUser));
 
             updateAuthUI();
             signupForm.reset();
-            showToast(`🎉 [${name}] 님의 구글 지메일 계정이 성공적으로 가입 승인 및 등록되었습니다!`, 'success');
+
+            if (isMaster || newUser.status === 'approved') {
+                showToast(`🎉 [${name}] 님 환영합니다! 위탁 수납 시스템에 접속되었습니다.`, 'success');
+            } else {
+                alert(`🎉 [${name}] 님의 구글 지메일 가입 신청이 완료되었습니다!\n\nrkstmtk@gmail.com 최고 관리자가 회원 승인을 완료하면 메인 화면 및 5개 탭 기능을 이용하실 수 있습니다.`);
+            }
+        });
+    }
+
+    // Pending Approval Screen Controls
+    if (checkApprovalStatusBtn) {
+        checkApprovalStatusBtn.addEventListener('click', () => {
+            try {
+                const savedUsers = localStorage.getItem('care_fee_registered_users');
+                if (savedUsers && state.currentUser) {
+                    const freshList = JSON.parse(savedUsers);
+                    const freshUser = freshList.find(u => u.email.toLowerCase() === state.currentUser.email.toLowerCase());
+                    if (freshUser) {
+                        state.currentUser = freshUser;
+                        localStorage.setItem('care_fee_auth_user', JSON.stringify(freshUser));
+                        updateAuthUI();
+
+                        if (freshUser.status === 'approved') {
+                            showToast(`🎉 관리자 승인이 완료되었습니다! 환영합니다 [${freshUser.name}] 님!`, 'success');
+                            return;
+                        }
+                    }
+                }
+            } catch (e) {}
+            showToast('아직 rkstmtk@gmail.com 관리자 승인 대기 중입니다.', 'info');
+        });
+    }
+
+    if (pendingLogoutBtn) {
+        pendingLogoutBtn.addEventListener('click', () => {
+            doLogout();
         });
     }
 
@@ -228,24 +293,151 @@ function initAuthSystem() {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
             if (confirm('위탁진료비 관리 시스템에서 로그아웃 하시겠습니까?')) {
-                state.currentUser = null;
-                localStorage.removeItem('care_fee_auth_user');
-                updateAuthUI();
-                showToast('안전하게 로그아웃 되었습니다.', 'info');
+                doLogout();
             }
         });
     }
 
+    function doLogout() {
+        state.currentUser = null;
+        localStorage.removeItem('care_fee_auth_user');
+        updateAuthUI();
+        showToast('안전하게 로그아웃 되었습니다.', 'info');
+    }
+
+    // Master Admin Approval Panel Modal Events
+    if (adminPanelBtn && adminModal) {
+        adminPanelBtn.addEventListener('click', () => {
+            renderAdminUserList();
+            adminModal.classList.remove('hidden');
+        });
+    }
+
+    function renderAdminUserList() {
+        if (!adminUserTbody) return;
+
+        try {
+            const savedUsers = localStorage.getItem('care_fee_registered_users');
+            if (savedUsers) registeredUsers = JSON.parse(savedUsers);
+        } catch (e) {}
+
+        const pendingCount = registeredUsers.filter(u => u.status === 'pending').length;
+        if (adminPendingBadge) {
+            adminPendingBadge.textContent = pendingCount;
+            adminPendingBadge.style.display = pendingCount > 0 ? 'inline-block' : 'none';
+        }
+
+        adminUserTbody.innerHTML = registeredUsers.map(u => {
+            const isMaster = (u.email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase());
+            const dateStr = u.createdAt ? u.createdAt.substring(0, 10) : '-';
+            const isApproved = u.status === 'approved';
+            const isRejected = u.status === 'rejected';
+
+            return `
+                <tr>
+                    <td><strong>${escapeHtml(u.name || '-')}</strong> ${isMaster ? '<span class="badge badge-warning" style="background:#fef08a; color:#854d0e;">마스터</span>' : ''}</td>
+                    <td><code>${escapeHtml(u.email)}</code></td>
+                    <td>${dateStr}</td>
+                    <td>
+                        ${isApproved ? '<span class="badge badge-success"><i class="fa-solid fa-check"></i> 승인 완료</span>' : ''}
+                        ${isRejected ? '<span class="badge badge-danger"><i class="fa-solid fa-ban"></i> 접속 차단</span>' : ''}
+                        ${(!isApproved && !isRejected) ? '<span class="badge badge-info" style="background:#fef08a; color:#854d0e;"><i class="fa-solid fa-clock"></i> 승인 대기</span>' : ''}
+                    </td>
+                    <td>
+                        ${isMaster ? '<span class="text-muted" style="font-size:0.78rem;">최고 관리자 계정</span>' : `
+                            <div class="flex-center gap-1">
+                                ${!isApproved ? `
+                                    <button class="btn btn-sm btn-success" onclick="approveUserAccount('${escapeHtml(u.email)}')">
+                                        <i class="fa-solid fa-user-check"></i> 승인하기
+                                    </button>
+                                ` : `
+                                    <button class="btn btn-sm btn-outline text-danger" onclick="revokeUserAccount('${escapeHtml(u.email)}')">
+                                        <i class="fa-solid fa-user-xmark"></i> 승인취소
+                                    </button>
+                                `}
+                                <button class="btn btn-sm btn-outline text-danger" onclick="deleteUserAccount('${escapeHtml(u.email)}')">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        `}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // Expose Admin Actions to Window
+    window.approveUserAccount = function(email) {
+        const user = registeredUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+        if (user) {
+            user.status = 'approved';
+            localStorage.setItem('care_fee_registered_users', JSON.stringify(registeredUsers));
+            renderAdminUserList();
+            showToast(`[${user.name || user.email}] 님의 가입 권한이 승인되었습니다!`, 'success');
+        }
+    };
+
+    window.revokeUserAccount = function(email) {
+        const user = registeredUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+        if (user) {
+            user.status = 'rejected';
+            localStorage.setItem('care_fee_registered_users', JSON.stringify(registeredUsers));
+            renderAdminUserList();
+            showToast(`[${user.name || user.email}] 님의 접속 권한이 차단되었습니다.`, 'info');
+        }
+    };
+
+    window.deleteUserAccount = function(email) {
+        if (confirm(`[${email}] 계정을 가입자 목록에서 삭제하시겠습니까?`)) {
+            registeredUsers = registeredUsers.filter(u => u.email.toLowerCase() !== email.toLowerCase());
+            localStorage.setItem('care_fee_registered_users', JSON.stringify(registeredUsers));
+            renderAdminUserList();
+            showToast('가입 계정이 삭제되었습니다.', 'info');
+        }
+    };
+
     function updateAuthUI() {
-        if (state.currentUser) {
+        if (!state.currentUser) {
+            if (authOverlay) authOverlay.classList.remove('hidden');
+            if (appContainer) appContainer.style.display = 'none';
+            if (userInfoBar) userInfoBar.classList.add('hidden');
+            if (adminPanelBtn) adminPanelBtn.classList.add('hidden');
+
+            if (loginForm) loginForm.classList.remove('hidden');
+            if (signupForm) signupForm.classList.add('hidden');
+            if (pendingApprovalBox) pendingApprovalBox.classList.add('hidden');
+            return;
+        }
+
+        const isMasterAdmin = (state.currentUser.email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase());
+        const isApproved = isMasterAdmin || (state.currentUser.status === 'approved');
+
+        if (isApproved) {
             if (authOverlay) authOverlay.classList.add('hidden');
             if (appContainer) appContainer.style.display = 'flex';
             if (userInfoBar) userInfoBar.classList.remove('hidden');
             if (userDisplayName) userDisplayName.textContent = `${state.currentUser.name || state.currentUser.email} (${state.currentUser.email})`;
+
+            if (isMasterAdmin && adminPanelBtn) {
+                adminPanelBtn.classList.remove('hidden');
+                const pendingCount = registeredUsers.filter(u => u.status === 'pending').length;
+                if (adminPendingBadge) {
+                    adminPendingBadge.textContent = pendingCount;
+                    adminPendingBadge.style.display = pendingCount > 0 ? 'inline-block' : 'none';
+                }
+            } else if (adminPanelBtn) {
+                adminPanelBtn.classList.add('hidden');
+            }
         } else {
             if (authOverlay) authOverlay.classList.remove('hidden');
             if (appContainer) appContainer.style.display = 'none';
             if (userInfoBar) userInfoBar.classList.add('hidden');
+            if (adminPanelBtn) adminPanelBtn.classList.add('hidden');
+
+            if (loginForm) loginForm.classList.add('hidden');
+            if (signupForm) signupForm.classList.add('hidden');
+            if (pendingApprovalBox) pendingApprovalBox.classList.remove('hidden');
+            if (pendingUserEmailText) pendingUserEmailText.textContent = state.currentUser.email;
         }
     }
 }

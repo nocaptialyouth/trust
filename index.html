@@ -48,8 +48,13 @@
 
             <!-- Quick Utilities & User Auth Bar -->
             <div class="header-utilities">
+                <!-- Master Admin (rkstmtk@gmail.com) Approval Management Button -->
+                <button id="admin-panel-btn" class="btn btn-sm btn-warning hidden" style="background:#eab308; color:#0f172a; font-weight:800; border:none;" title="가입자 권한 승인 관리">
+                    <i class="fa-solid fa-user-shield"></i> 가입자 권한 승인 관리 <span id="admin-pending-badge" class="badge badge-danger ml-1" style="background:#ef4444; color:#fff; font-size:0.7rem;">0</span>
+                </button>
+
                 <div id="user-info-bar" class="user-badge flex-center gap-2 hidden">
-                    <span class="user-email-tag"><i class="fa-solid fa-user-shield"></i> <span id="user-display-name">hospital.trust@gmail.com</span></span>
+                    <span class="user-email-tag"><i class="fa-solid fa-user-shield"></i> <span id="user-display-name">rkstmtk@gmail.com</span></span>
                     <button id="logout-btn" class="btn btn-sm btn-outline text-light" title="로그아웃" style="border-color: rgba(255,255,255,0.3);">
                         <i class="fa-solid fa-right-from-bracket"></i> 로그아웃
                     </button>
@@ -762,9 +767,66 @@
                     </div>
                 </div>
                 <button type="submit" class="btn btn-success btn-block btn-lg" style="padding: 0.75rem;">
-                    <i class="fa-solid fa-user-check"></i> 지메일 계정 가입 신청 및 즉시 접속
+                    <i class="fa-solid fa-user-check"></i> 지메일 계정 가입 신청
                 </button>
             </form>
+
+            <!-- Pending Approval Screen -->
+            <div id="pending-approval-box" class="auth-form hidden text-center" style="padding: 1rem 0;">
+                <div class="stat-icon mx-auto mb-3" style="width:56px; height:56px; border-radius:50%; background:#fef08a; color:#854d0e; font-size:1.6rem; display:flex; align-items:center; justify-content:center; margin: 0 auto 1rem auto;">
+                    <i class="fa-solid fa-user-clock"></i>
+                </div>
+                <h3 style="font-size: 1.15rem; font-weight: 800; color:var(--text-main);" class="mb-2">관리자 권한 승인 대기 중</h3>
+                <p class="text-muted" style="font-size: 0.85rem; line-height: 1.6; margin-bottom: 1.25rem;">
+                    가입 신청이 완료되었습니다.<br>
+                    최고 관리자(<strong style="color:var(--primary-color)">rkstmtk@gmail.com</strong>)의 권한 승인 후 메인 화면 및 5개 탭 기능을 자유롭게 이용하실 수 있습니다.
+                </p>
+                <div class="alert-info-box mb-4" style="background:var(--stat-blue-bg); color:var(--stat-blue); border-color:rgba(2,132,199,0.3); text-align:center;">
+                    <i class="fa-solid fa-envelope"></i> 신청 계정: <strong id="pending-user-email-text">user@gmail.com</strong>
+                </div>
+                <div class="flex-center gap-2 justify-content-center">
+                    <button type="button" class="btn btn-outline" id="check-approval-status-btn">
+                        <i class="fa-solid fa-rotate"></i> 승인 상태 확인 (새로고침)
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="pending-logout-btn">
+                        <i class="fa-solid fa-right-from-bracket"></i> 로그아웃
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 3: Master Admin Approval Management Modal (rkstmtk@gmail.com Only) -->
+    <div id="admin-approval-modal" class="modal-overlay hidden">
+        <div class="modal-box modal-lg">
+            <div class="modal-header" style="background:#0f172a; color:#fff;">
+                <h3 style="color:#fff;"><i class="fa-solid fa-user-shield text-warning"></i> 가입자 권한 승인 관리 (마스터 관리자: rkstmtk@gmail.com)</h3>
+                <button class="close-modal-btn" style="color:#fff;">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert-info-box mb-3" style="background:#fef08a; color:#854d0e; border:1px solid #fde047;">
+                    <i class="fa-solid fa-crown"></i>
+                    <strong>rkstmtk@gmail.com 최고 관리자 권한 전용 패널입니다.</strong><br>
+                    신청된 구글 지메일 계정의 권한을 승인(허용)하시면 해당 사용자가 로그인하여 메인 화면 및 5개 탭을 이용할 수 있게 됩니다.
+                </div>
+
+                <div class="table-responsive border rounded" style="max-height: 420px;">
+                    <table class="data-table sticky-header">
+                        <thead>
+                            <tr>
+                                <th>성명 (담당자)</th>
+                                <th>구글 지메일 주소</th>
+                                <th>가입 신청일</th>
+                                <th>권한 상태</th>
+                                <th>권한 승인 관리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-user-list-tbody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 
