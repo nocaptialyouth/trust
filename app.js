@@ -7,6 +7,7 @@ const PUBLIC_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT
 
 // Global Application State
 const state = {
+    currentUser: null,
     masterPatients: [],
     transactions: [],
     bulkResults: [],
@@ -29,6 +30,7 @@ const state = {
 
 // DOM Content Loaded Initializer
 document.addEventListener('DOMContentLoaded', async () => {
+    initAuthSystem();
     initTheme();
     initTabNavigation();
     initSyncSettings();
@@ -50,6 +52,203 @@ document.addEventListener('DOMContentLoaded', async () => {
         fetchLiveGoogleSheetData(false);
     }, 30000);
 });
+
+/* --------------------------------------------------------------------------
+   0. Authentication & Authorization (@gmail.com Restriction)
+   -------------------------------------------------------------------------- */
+function initAuthSystem() {
+    const authOverlay = document.getElementById('auth-modal-overlay');
+    const appContainer = document.getElementById('app');
+    const userInfoBar = document.getElementById('user-info-bar');
+    const userDisplayName = document.getElementById('user-display-name');
+    const logoutBtn = document.getElementById('logout-btn');
+
+    const authTabLogin = document.getElementById('auth-tab-login');
+    const authTabSignup = document.getElementById('auth-tab-signup');
+    const loginForm = document.getElementById('login-form');
+    const signupForm = document.getElementById('signup-form');
+
+    // Registered users dataset
+    let registeredUsers = [];
+    try {
+        const savedUsers = localStorage.getItem('care_fee_registered_users');
+        if (savedUsers) {
+            registeredUsers = JSON.parse(savedUsers);
+        }
+    } catch (e) {
+        console.error('Error loading registered users:', e);
+    }
+
+    // Default admin account if list is empty
+    if (!registeredUsers || registeredUsers.length === 0) {
+        registeredUsers = [{
+            email: 'hospital.trust@gmail.com',
+            name: '원무팀 관리자',
+            password: 'admin',
+            createdAt: new Date().toISOString()
+        }];
+        localStorage.setItem('care_fee_registered_users', JSON.stringify(registeredUsers));
+    }
+
+    // Load active session user
+    try {
+        const savedAuth = localStorage.getItem('care_fee_auth_user');
+        if (savedAuth) {
+            state.currentUser = JSON.parse(savedAuth);
+        }
+    } catch (e) {
+        state.currentUser = null;
+    }
+
+    updateAuthUI();
+
+    // Tab switching between Login and Sign Up
+    if (authTabLogin && authTabSignup) {
+        authTabLogin.addEventListener('click', () => {
+            authTabLogin.classList.add('active');
+            authTabSignup.classList.remove('active');
+            loginForm.classList.remove('hidden');
+            signupForm.classList.add('hidden');
+        });
+
+        authTabSignup.addEventListener('click', () => {
+            authTabSignup.classList.add('active');
+            authTabLogin.classList.remove('active');
+            signupForm.classList.remove('hidden');
+            loginForm.classList.add('hidden');
+        });
+    }
+
+    // Strict Gmail domain validator (@gmail.com or @googlemail.com)
+    function isValidGmail(email) {
+        if (!email) return false;
+        const clean = email.trim().toLowerCase();
+        return clean.endsWith('@gmail.com') || clean.endsWith('@googlemail.com');
+    }
+
+    // Login Form Submit
+    if (loginForm) {
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value;
+
+            if (!isValidGmail(email)) {
+                alert('⚠️ 개인정보 보호 규정에 따라 구글 지메일(@gmail.com) 주소로 가입된 계정만 로그인 가능합니다.');
+                return;
+            }
+
+            const foundUser = registeredUsers.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
+            if (foundUser) {
+                state.currentUser = foundUser;
+                localStorage.setItem('care_fee_auth_user', JSON.stringify(foundUser));
+                updateAuthUI();
+                showToast(`[${foundUser.name || foundUser.email}] 님 환영합니다! 위탁 수납 시스템에 접속되었습니다.`, 'success');
+            } else {
+                alert('❌ 등록된 지메일 계정이 없거나 비밀번호가 올바르지 않습니다.\n[회원가입 (지메일)] 탭에서 가입 신청을 먼저 진행해 주세요.');
+            }
+        });
+    }
+
+    // Sign Up Form Submit with Strict @gmail.com Domain Enforcement
+    if (signupForm) {
+        const signupEmailInput = document.getElementById('signup-email');
+        const emailWarnText = document.getElementById('signup-email-warn');
+
+        if (signupEmailInput) {
+            signupEmailInput.addEventListener('input', (e) => {
+                const val = e.target.value.trim();
+                if (val && !isValidGmail(val)) {
+                    signupEmailInput.style.borderColor = '#ef4444';
+                    if (emailWarnText) {
+                        emailWarnText.textContent = '❌ @gmail.com 이외의 메일(네이버, 다음 등)은 신청할 수 없습니다.';
+                        emailWarnText.style.color = '#ef4444';
+                    }
+                } else if (val && isValidGmail(val)) {
+                    signupEmailInput.style.borderColor = '#10b981';
+                    if (emailWarnText) {
+                        emailWarnText.textContent = '✓ 올바른 구글 지메일 주소입니다. 가입 가능합니다.';
+                        emailWarnText.style.color = '#10b981';
+                    }
+                } else {
+                    signupEmailInput.style.borderColor = '';
+                    if (emailWarnText) {
+                        emailWarnText.textContent = '🔒 개인정보 보호 규정상 @gmail.com 주소만 가입이 허용됩니다.';
+                        emailWarnText.style.color = '#ef4444';
+                    }
+                }
+            });
+        }
+
+        signupForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('signup-name').value.trim();
+            const email = document.getElementById('signup-email').value.trim();
+            const password = document.getElementById('signup-password').value;
+            const confirm = document.getElementById('signup-password-confirm').value;
+
+            if (!isValidGmail(email)) {
+                alert('⚠️ 개인정보 보호를 위해 구글 지메일(@gmail.com) 신청자만 가입할 수 있습니다.\n구글 이메일 주소를 다시 확인해 주세요.');
+                return;
+            }
+
+            if (password !== confirm) {
+                alert('⚠️ 설정하신 비밀번호와 비밀번호 확인 입력이 일치하지 않습니다.');
+                return;
+            }
+
+            // Check duplicate registration
+            const exists = registeredUsers.some(u => u.email.toLowerCase() === email.toLowerCase());
+            if (exists) {
+                alert('⚠️ 이미 가입된 구글 지메일 계정입니다. 로그인 탭에서 로그인해 주세요.');
+                return;
+            }
+
+            const newUser = {
+                email: email,
+                name: name,
+                password: password,
+                createdAt: new Date().toISOString()
+            };
+
+            registeredUsers.push(newUser);
+            localStorage.setItem('care_fee_registered_users', JSON.stringify(registeredUsers));
+
+            // Auto log in new registered user
+            state.currentUser = newUser;
+            localStorage.setItem('care_fee_auth_user', JSON.stringify(newUser));
+
+            updateAuthUI();
+            signupForm.reset();
+            showToast(`🎉 [${name}] 님의 구글 지메일 계정이 성공적으로 가입 승인 및 등록되었습니다!`, 'success');
+        });
+    }
+
+    // Logout Event
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            if (confirm('위탁진료비 관리 시스템에서 로그아웃 하시겠습니까?')) {
+                state.currentUser = null;
+                localStorage.removeItem('care_fee_auth_user');
+                updateAuthUI();
+                showToast('안전하게 로그아웃 되었습니다.', 'info');
+            }
+        });
+    }
+
+    function updateAuthUI() {
+        if (state.currentUser) {
+            if (authOverlay) authOverlay.classList.add('hidden');
+            if (appContainer) appContainer.style.display = 'flex';
+            if (userInfoBar) userInfoBar.classList.remove('hidden');
+            if (userDisplayName) userDisplayName.textContent = `${state.currentUser.name || state.currentUser.email} (${state.currentUser.email})`;
+        } else {
+            if (authOverlay) authOverlay.classList.remove('hidden');
+            if (appContainer) appContainer.style.display = 'none';
+            if (userInfoBar) userInfoBar.classList.add('hidden');
+        }
+    }
+}
 
 /* --------------------------------------------------------------------------
    1. Initial Data Loading & Persistence

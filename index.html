@@ -46,8 +46,14 @@
                 </button>
             </nav>
 
-            <!-- Quick Utilities -->
+            <!-- Quick Utilities & User Auth Bar -->
             <div class="header-utilities">
+                <div id="user-info-bar" class="user-badge flex-center gap-2 hidden">
+                    <span class="user-email-tag"><i class="fa-solid fa-user-shield"></i> <span id="user-display-name">hospital.trust@gmail.com</span></span>
+                    <button id="logout-btn" class="btn btn-sm btn-outline text-light" title="로그아웃" style="border-color: rgba(255,255,255,0.3);">
+                        <i class="fa-solid fa-right-from-bracket"></i> 로그아웃
+                    </button>
+                </div>
                 <button id="sync-live-sheet-btn" class="btn btn-success btn-sm" title="구글 시트의 실시간 최신 환자/계좌 데이터 불러오기">
                     <i class="fa-solid fa-rotate"></i> 구글 시트 실시간 동기화
                 </button>
@@ -674,6 +680,93 @@
 
     <!-- Notification Toast -->
     <div id="toast" class="toast hidden"></div>
+
+    <!-- Google Email (@gmail.com) Authentication Overlay -->
+    <div id="auth-modal-overlay" class="auth-overlay">
+        <div class="auth-box card">
+            <div class="auth-header text-center">
+                <div class="logo-icon" style="margin: 0 auto 0.75rem auto;">
+                    <i class="fa-solid fa-hospital-user"></i>
+                </div>
+                <h2>위탁진료비 수납 & 계좌 관리 시스템</h2>
+                <p class="text-muted" style="font-size:0.82rem; margin-top:0.25rem;">
+                    <i class="fa-solid fa-shield-halved text-success"></i> 환자 개인정보 보호를 위한 구글 지메일 보안 인증
+                </p>
+            </div>
+
+            <!-- Auth Tabs (로그인 / 회원가입) -->
+            <div class="auth-tabs nav-tabs" style="margin: 1.25rem 0;">
+                <button type="button" class="tab-btn active" id="auth-tab-login" style="flex: 1; justify-content: center;">
+                    <i class="fa-solid fa-right-to-bracket"></i> 로그인
+                </button>
+                <button type="button" class="tab-btn" id="auth-tab-signup" style="flex: 1; justify-content: center;">
+                    <i class="fa-solid fa-user-plus"></i> 회원가입 (지메일)
+                </button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="login-form" class="auth-form">
+                <div class="form-group mb-3">
+                    <label for="login-email" class="required-label">구글 이메일 주소 (@gmail.com)</label>
+                    <div class="input-with-icon">
+                        <i class="fa-solid fa-envelope search-icon"></i>
+                        <input type="email" id="login-email" class="form-control" placeholder="your_email@gmail.com" required>
+                    </div>
+                </div>
+                <div class="form-group mb-3">
+                    <label for="login-password" class="required-label">비밀번호</label>
+                    <div class="input-with-icon">
+                        <i class="fa-solid fa-lock search-icon"></i>
+                        <input type="password" id="login-password" class="form-control" placeholder="비밀번호 입력" required>
+                    </div>
+                </div>
+                <div class="alert-info-box mb-3" style="margin-bottom: 1.25rem;">
+                    <i class="fa-solid fa-lock"></i> 개인정보 보안을 위해 구글 지메일(@gmail.com) 가입자만 접속 가능합니다.
+                </div>
+                <button type="submit" class="btn btn-primary btn-block btn-lg" style="padding: 0.75rem;">
+                    <i class="fa-solid fa-right-to-bracket"></i> 로그인하여 시스템 접속
+                </button>
+            </form>
+
+            <!-- Sign Up Form -->
+            <form id="signup-form" class="auth-form hidden">
+                <div class="form-group mb-2">
+                    <label for="signup-name" class="required-label">성명 (원무/심사 담당자명)</label>
+                    <div class="input-with-icon">
+                        <i class="fa-solid fa-user search-icon"></i>
+                        <input type="text" id="signup-name" class="form-control" placeholder="예: 홍길동 (원무과)" required>
+                    </div>
+                </div>
+                <div class="form-group mb-2">
+                    <label for="signup-email" class="required-label">구글 지메일 주소만 가능 (@gmail.com)</label>
+                    <div class="input-with-icon">
+                        <i class="fa-solid fa-envelope search-icon"></i>
+                        <input type="email" id="signup-email" class="form-control" placeholder="example@gmail.com" required>
+                    </div>
+                    <small class="form-text text-danger font-weight-bold" id="signup-email-warn" style="color: #ef4444; font-size: 0.78rem; display: block; margin-top: 0.25rem;">
+                        🔒 개인정보 보호 규정상 @gmail.com 주소만 가입이 허용됩니다.
+                    </small>
+                </div>
+                <div class="form-group mb-2">
+                    <label for="signup-password" class="required-label">비밀번호</label>
+                    <div class="input-with-icon">
+                        <i class="fa-solid fa-lock search-icon"></i>
+                        <input type="password" id="signup-password" class="form-control" placeholder="비밀번호 설정" required minlength="4">
+                    </div>
+                </div>
+                <div class="form-group mb-3">
+                    <label for="signup-password-confirm" class="required-label">비밀번호 확인</label>
+                    <div class="input-with-icon">
+                        <i class="fa-solid fa-key search-icon"></i>
+                        <input type="password" id="signup-password-confirm" class="form-control" placeholder="비밀번호 다시 입력" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success btn-block btn-lg" style="padding: 0.75rem;">
+                    <i class="fa-solid fa-user-check"></i> 지메일 계정 가입 신청 및 즉시 접속
+                </button>
+            </form>
+        </div>
+    </div>
 
     <script src="initial_data.js"></script>
     <script src="google_apps_script.js"></script>
