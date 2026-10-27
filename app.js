@@ -3,7 +3,8 @@
    ========================================================================== */
 
 const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyi0iJclzJWDK1fSEnzSa1AGDHD_YeSlsj9J82XEMTl26UF9EPatP1jv0iJCrpdrghK/exec';
-const PUBLIC_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTglnQ5SSB6mtD3tERFLwtNl8HST0Hwd_jU-XHMTERzher8RSLxTWVOSRfZtPJoTT4xFbariKMF6HHqK/pub?output=csv';
+const PUBLIC_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/175753a4Qisra6OZk-FdHlV5RiTL6gSVXwHZgF3yUr5o/export?format=csv&gid=417334077';
+const GVIZ_SHEET_URL = 'https://docs.google.com/spreadsheets/d/175753a4Qisra6OZk-FdHlV5RiTL6gSVXwHZgF3yUr5o/gviz/tq?tqx=out:json&gid=417334077';
 
 // Global Application State
 const state = {
@@ -585,6 +586,7 @@ async function fetchLiveGoogleSheetData(isManual = false) {
         showToast('구글 스프레드시트 최신 수납 데이터 동기화를 진행합니다...', 'info');
     }
 
+    // 1. 배포된 구글 웹앱(Apps Script)이 설정되어 있는 경우 우선 시도
     if (state.gasAppUrl) {
         try {
             const response = await fetch(state.gasAppUrl);
@@ -598,7 +600,8 @@ async function fetchLiveGoogleSheetData(isManual = false) {
                         state.transactions = sortTransactions(data.transactions, state.filters.sortBy);
                     }
                     renderAll();
-                    if (isManual) showToast(`구글 시트 동기화 완료! (제출일자 최신순 정렬됨: 총 ${state.transactions.length.toLocaleString()}건)`, 'success');
+                    updateSyncStatusBar();
+                    if (isManual) showToast(`구글 시트 동기화 완료! (총 ${state.transactions.length.toLocaleString()}건)`, 'success');
                     return;
                 }
             }
@@ -607,6 +610,32 @@ async function fetchLiveGoogleSheetData(isManual = false) {
         }
     }
 
+    // 2. Google Visualization API (브라우저 CORS 완전 허용) 실시간 최신 수납 데이터 동기화
+    try {
+        const gvizRes = await fetch(GVIZ_SHEET_URL);
+        if (gvizRes.ok) {
+            const rawText = await gvizRes.text();
+            const start = rawText.indexOf('{');
+            const end = rawText.lastIndexOf('}');
+            if (start !== -1 && end !== -1) {
+                const json = JSON.parse(rawText.substring(start, end + 1));
+                if (json.table && json.table.rows && json.table.rows.length > 0) {
+                    const parsedTx = parseGvizRowsAndMerge(json.table.rows);
+                    if (parsedTx && parsedTx.length > 0) {
+                        state.transactions = sortTransactions(parsedTx, state.filters.sortBy);
+                        renderAll();
+                        updateSyncStatusBar();
+                        if (isManual) showToast(`구글 시트 실시간 동기화 완료! (총 ${state.transactions.length.toLocaleString()}건)`, 'success');
+                        return;
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.log('GViz sync quiet fallback:', e);
+    }
+
+    // 3. CSV 직접 내보내기 폴백
     try {
         const csvRes = await fetch(PUBLIC_SHEET_CSV_URL);
         if (csvRes.ok) {
@@ -619,8 +648,77 @@ async function fetchLiveGoogleSheetData(isManual = false) {
         console.log('Quiet CSV sync');
     }
 
+    // 4. 로컬 번들 데이터셋 로드
     loadInitialData();
     renderAll();
+}
+
+function parseGvizRowsAndMerge(rows) {
+    const liveTxs = [];
+    rows.forEach((r, idx) => {
+        const c = r.c || [];
+        if (!c[1] || !c[1].v) return;
+        const pName = String(c[1].v).trim();
+        if (!pName) return;
+
+        const tDate = c[2] ? (c[2].f || c[2].v || '') : '';
+        const sDate = c[3] ? (c[3].f || c[3].v || '') : '';
+        const amt = c[4] ? (typeof c[4].v === 'number' ? c[4].v : parseFloat(String(c[4].v).replace(/[^0-9.-]+/g, '')) || 0) : 0;
+        const inCharge = c[5] ? String(c[5].v || '').trim() : '';
+        const hospital = c[6] ? String(c[6].v || '').trim() : '';
+        const submitter = c[7] ? String(c[7].v || '').trim() : '';
+        const residentNo = c[8] ? String(c[8].v || '').trim() : '';
+        const insuranceType = c[9] ? String(c[9].v || '').trim() : '';
+        const bank = c[10] ? String(c[10].v || '').trim() : '';
+        const account = c[11] ? String(c[11].v || '').trim() : '';
+        const depositor = c[12] ? String(c[12].v || '').trim() : '';
+        const contact = c[13] ? String(c[13].v || '').trim() : '';
+        const receiptCount = c[14] ? String(c[14].v || '1').trim() : '1';
+        const remarks = c[15] ? String(c[15].v || '').trim() : '';
+        const uVal = c[20] ? String(c[20].v || '') : '';
+        const wVal = c[22] ? String(c[22].v || '') : '';
+        const xVal = c[23] ? String(c[23].v || '') : '';
+
+        liveTxs.push({
+            id: 'T_GV_' + (idx + 1),
+            patientName: pName,
+            treatmentDate: tDate,
+            submitDate: sDate,
+            amount: amt,
+            inCharge: inCharge,
+            hospital: hospital,
+            submitter: submitter,
+            residentNo: residentNo,
+            insuranceType: insuranceType,
+            bank: bank,
+            account: account,
+            depositor: depositor,
+            contact: contact,
+            receiptCount: receiptCount,
+            remarks: remarks,
+            adminChecked: uVal === '1' || uVal === 'O' || uVal === 'o',
+            auditChecked: wVal === '1' || wVal === 'O' || wVal === 'o',
+            isError: Boolean(xVal && xVal !== '0' && xVal !== 0)
+        });
+    });
+
+    // Merge with base dataset transactions (so 2024~2025 previous years are fully preserved)
+    const baseTxs = (window.INITIAL_DATA && window.INITIAL_DATA.transactions) ? [...window.INITIAL_DATA.transactions] : [];
+    const savedUserTxs = localStorage.getItem('care_fee_user_txs');
+    let userTxs = savedUserTxs ? JSON.parse(savedUserTxs) : [];
+
+    const merged = [...userTxs, ...liveTxs, ...baseTxs];
+    const unique = [];
+    const seen = new Set();
+    merged.forEach(item => {
+        const key = `${item.patientName}_${item.treatmentDate}_${item.submitDate}_${Math.round(item.amount)}`;
+        if (!seen.has(key)) {
+            seen.add(key);
+            unique.push(item);
+        }
+    });
+
+    return unique;
 }
 
 function parsePublicCSVAndSync(csvText) {
@@ -910,28 +1008,27 @@ function showCopyNotificationForGoogleSheet(tx) {
         tx.treatmentDate,
         tx.submitDate,
         tx.amount,
-        tx.inCharge,
-        tx.hospital,
-        tx.submitter
+        tx.inCharge || '',
+        tx.hospital || '',
+        tx.submitter || ''
     ].join('\t');
 
+    toast.className = 'toast show';
+    toast.style.background = '#10b981';
     toast.innerHTML = `
         <div class="flex-between gap-3">
             <span>🎉 [${escapeHtml(tx.patientName)}] 님 수납 등록 완료! (웹 장부에 실시간 추가됨)</span>
             <button class="btn btn-sm btn-success" id="copy-row-for-gs-btn" style="background:#ffffff; color:#059669; font-weight:800;">
-                <i class="fa-solid fa-copy"></i> B5359 셀 7개 항목 복사 (Ctrl+V용)
+                <i class="fa-solid fa-copy"></i> 구글 시트 복사용 7개 항목 복사
             </button>
         </div>
     `;
-
-    toast.className = 'toast toast-success';
-    toast.classList.remove('hidden');
 
     const copyBtn = document.getElementById('copy-row-for-gs-btn');
     if (copyBtn) {
         copyBtn.addEventListener('click', () => {
             navigator.clipboard.writeText(tsv7Cols).then(() => {
-                alert(`[${tx.patientName}] 님의 7개 필수 정보가 복사되었습니다!\n\n(환자명, 진료일자, 제출일자, 금액, 담당자, 위탁병원, 제출자)\n\n구글 스프레드시트 5359행 B열(B5359)을 누르고 Ctrl+V 하시면 바로 깔끔하게 붙여넣어집니다.`);
+                alert(`[${tx.patientName}] 님의 7개 필수 정보가 복사되었습니다!\n\n(환자명, 진료일자, 제출일자, 금액, 담당자, 위탁병원, 제출자)\n\n구글 스프레드시트 25~26년 시트 마지막 빈 행 B열을 누르고 Ctrl+V 하시면 바로 깔끔하게 붙여넣어집니다.`);
             });
         });
     }

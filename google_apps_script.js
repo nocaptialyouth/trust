@@ -221,19 +221,19 @@ function doPost(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var data = JSON.parse(e.postData.contents);
     
-    // 7-1. 수납 건 추가
+    // 7-1. 수납 건 추가 (동적 마지막 행 탐색)
     if (data.action === 'addTransaction') {
       var sheet = ss.getSheetByName('25~26년');
       if (!sheet) sheet = ss.insertSheet('25~26년');
       
       var t = data.transaction;
       var lastRow = sheet.getLastRow();
-      var targetRow = 5359;
+      var bValues = sheet.getRange(1, 2, Math.max(lastRow + 50, 100), 1).getValues();
+      var targetRow = lastRow + 1;
       
-      var bValues = sheet.getRange(1, 2, Math.max(lastRow + 20, 5450), 1).getValues();
-      for (var r = 3; r < bValues.length; r++) {
+      for (var r = 4; r < bValues.length; r++) {
         if (!bValues[r][0] || String(bValues[r][0]).trim() === '') {
-          targetRow = Math.max(r + 1, 5359);
+          targetRow = r + 1;
           break;
         }
       }
@@ -247,6 +247,7 @@ function doPost(e) {
       
       return ContentService.createTextOutput(JSON.stringify({
         status: 'success',
+        targetRow: targetRow,
         message: '구글시트 25~26년 시트 ' + targetRow + '행에 저장되었습니다.'
       })).setMimeType(ContentService.MimeType.JSON);
     }
@@ -285,16 +286,16 @@ function doPost(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
     
-    // 7-3. 마스터 환자 신규 추가
+    // 7-3. 마스터 환자 신규 추가 (동적 마지막 행 탐색)
     if (data.action === 'addMasterPatient') {
       var sheet = ss.getSheetByName('추가(A,B찾기)');
       if (!sheet) sheet = ss.insertSheet('추가(A,B찾기)');
       
       var p = data.patient;
       var lastRow = sheet.getLastRow();
-      var targetRow = 575;
+      var bValues = sheet.getRange(1, 2, Math.max(lastRow + 50, 100), 1).getValues();
+      var targetRow = lastRow + 1;
       
-      var bValues = sheet.getRange(1, 2, Math.max(lastRow + 20, 600), 1).getValues();
       for (var r = 2; r < bValues.length; r++) {
         if (!bValues[r][0] || String(bValues[r][0]).trim() === '') {
           targetRow = r + 1;
@@ -309,6 +310,7 @@ function doPost(e) {
       
       return ContentService.createTextOutput(JSON.stringify({
         status: 'success',
+        targetRow: targetRow,
         message: '구글시트 추가(A,B찾기) 시트 ' + targetRow + '행에 저장되었습니다.'
       })).setMimeType(ContentService.MimeType.JSON);
     }
